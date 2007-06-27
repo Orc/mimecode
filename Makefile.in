@@ -3,7 +3,7 @@
 #
 
 CXX=@CC@
-CFLAGS += @CFLAGS@
+CFLAGS += @CFLAGS@ -DVERSION=\"@VERSION@\"
 CXXFLAGS=$(CFLAGS)
 
 BINDIR=@exedir@
@@ -24,7 +24,7 @@ unravel: unravel.o qp.o base64.o clear.o openfile.o uudecode.o @OPTIONS@
 clean:
 	rm -f unravel *.o
 
-spotless: clean
+distclean spotless: clean
 	rm -f @CONFIGURE_FILES@ @GENERATED_FILES@
 
 install: install.bin install.man

@@ -35,6 +35,7 @@
 /*
  * ravel: builds a mime file from a list of input files
  */
+static char sccsid[] = "%Z%%M% %I% %E%";
 
 #include "config.h"
 
@@ -77,6 +78,15 @@ struct x_option options[] = {
     { 'V', 'V', "version", 0, "Show the current version, then exit" },
 } ;
 #define NROPTIONS	(sizeof options/sizeof options[0])
+
+
+void
+die(int code)
+{
+    fprintf(stderr, "\nusage: ravel [options] file [file...]\n\n");
+    showopts(stderr, NROPTIONS, options);
+    exit (code);
+}
 
 
 main(int argc, char **argv)
@@ -141,15 +151,16 @@ main(int argc, char **argv)
 	    verbose = 1;
 	    break;
 	case 'V':
-	    puts("%Z%%M% %I% %E%" + 4);
+	    puts("ravel " VERSION);
 	    exit(0);
 	default:
 	case 'h':
-	    fprintf(stderr, "\nusage: ravel [options] file [file...]\n\n");
-	    showopts(stderr, NROPTIONS, options);
-	    exit (opt == 'h' ? 0 : 1);
+	    die( opt == 'j' ? 0 : 1);
 	}
     }
+    if (argc == x_optind)
+	die(1);
+
     if (boundary == 0)
 	boundary = "Hello, Sailor";
     if (subject == 0)

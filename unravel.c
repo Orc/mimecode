@@ -35,6 +35,7 @@
 /*
  * unravel: picks apart a mimed article.
  */
+static char sccsid[] = "%Z%%M% %I% %E%";
 
 #include "config.h"
 
@@ -575,7 +576,6 @@ uud(FILE *input)
 } /* uud */
 
 
-enum { HELP=1, VERSION };
 struct x_option options[] = {
     { '7', '7', "7bit",    0, "Force filenames to 7 bit ascii" },
     { 'w', 'w', "write",   0, "Always write document fragments to files" },
@@ -605,7 +605,7 @@ main(int argc, char **argv)
 		writeoutput++;
 		break;
 	case 'V':
-		puts("%Z%%M% %I% %E%" + 4);
+		puts("unravel " VERSION);
 		exit(0);
 	default:
 		fprintf(stderr, "\nusage: unravel [options] [file]\n\n");
