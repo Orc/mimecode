@@ -1,0 +1,95 @@
+'.\"
+'.\"    %A%
+'.\"
+.TH RAVEL 1 "%E%" "Mastodon Linux"
+.SH NAME
+ravel \- build MIME documents
+.br
+unravel \- pick apart MIME documents
+.SH SYNOPSIS
+.B ravel
+[ -hV ] [ -s subj] [ -m msgid ] [-b text] [-p text] [-o file] [-t recipient]
+.I files
+.PP
+.B unravel
+[ -7hvwV ]
+[ file ]
+.SH DESCRIPTION
+.I Ravel
+and
+.I unravel
+are used to create and extract MIME-encoded mail documents, for
+transmitting over networks that
+do not support other than simple
+ASCII
+data.
+.PP
+.I Ravel
+reads
+.I files
+and writes an mime-encoded version
+to the standard output.
+For ascii files,
+.I ravel
+uses the
+.B quoted-printable
+encoding, and for binary files the base64 encoding.
+.PP
+.I Unravel
+breaks apart
+.I files
+(or by default, the standard input) into their original form.
+.SH OPTIONS
+.I Ravel
+and
+.I unravel
+take a few options.
+.I Unravel
+takes the following options:
+.IP -7
+Write output filenames in 7 bit USASCII.
+.IP -h
+Print a help message describing what command-line options are available,
+then exit.
+.IP -w
+Write every section of the mimed file to disk, even if it doesn't have a
+filename specified.
+.IP -v
+Print debugging and progress messages.
+.IP -V
+Print what version this is, then exit.
+
+.PP
+.I ravel
+takes the following options:
+.IP -h
+Print a help message, then exit.
+.IP -V
+Print what version this is, then exit.
+.IP "-s \fIsubject\fR"
+Use the given
+.B subject
+on the Subject: line of the mime-encoded document (the default is
+.B "Mime-encoded files"\fR)
+.IP "-m \fImessage-id\fR"
+Use the given
+.B message-id
+for the mime-encoded document, instead of a machine-generated one.
+.IP "-b \fIboundary-string\fR"
+Use the given boundary string to separate the elements in the
+encoded message.
+.IP "-p \fItext\fR"
+MIME documents traditionally come with a little header saying that
+this is a mime document and you may not be able to read it unless
+you've got a mime-capable document reader.  You may replace this
+message with any (single line) message that you choose.
+.IP "-o \fIfile\fR"
+Write the completed MIME document to
+.I file
+instead of to standard out.
+.IP "-t recipient"
+Attempt to mail this MIME document to the given recipient.
+.SH AUTHOR
+David Parsons (orc@pell.chi.il.us), for
+.B Mastodon
+Linux.

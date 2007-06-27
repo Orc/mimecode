@@ -1,0 +1,1077 @@
+Message-ID: <405.4/949146647/pell.PELL-DOM>
+Subject: e820 memory detection, for 2.3.40-4
+Mime-Version: 1.0
+Content-Type: multipart/mixed; boundary="Hello, Sailor"
+To: nathan.zook@amd.com
+To: orc
+
+This is a MIME-encoded message.  Decode it with `unravel' or
+any other MIME-unpacking software.  Unravel is available at
+http://www.pell.chi.il.us/~orc/Code/Mastodon/bin/mimecode/
+--Hello, Sailor
+Content-Disposition: inline; filename="2340-4.00readme"
+Content-type: text/plain; name="2340-4.00readme"
+Content-transfer-encoding: quoted-printable
+
+Finally, this is the latest work in progress.  I've integrated in my
+add_memory_region and region_check code, and it seems to work on my
+workstation (I goofed up GIGABYTE briefly and set it to megabytes;
+truncating memory at 4mb leads to some hilarious results!)
+
+This version;
+
+    has CONFIG_E820_PARANOID, which enables
+	FLAG_E820_PARANOID (es:di; ecx is always checked)
+	FLAG_E820_WRAP     (start+size > 64 bits)
+	FLAG_E820_LENGTH   (comment about ecx(out) !=3D 20)
+    and disables
+	FLAG_E820_GULLIBLE (allow, 0A0000 - 0100000, >=3D 4gb)
+
+    has CONFIG_E820_RECLAIM, which sets
+	FLAG_E820_RECLAIM if CONFIG_ACPI is not set
+
+    has CONFIG_E820_MERGE (merge adjacent memory regions)
+
+    the NATHAN flag is out -- I am completely won over to your way of
+    doing the bios[] start/end (if we're going to sort the bios map and=
+
+    run something like region_check on it, start/end wins very bigtime)=
+
+    that I'm willing to fight Linus over it.
+
+    physical_memory now contains a p_flags field (aka memr_flags),
+    which has the bits
+	CHK_PMEM_LENGTH   (comment about ecx(out) !=3D 20)
+	CHK_PMEM_GULLIBLE (accept memory from 0A0000 - 0100000 and >=3D=
+ 4gb)
+	CHK_PMEM_RECLAIM  (reclaim ACPI tables)
+
+
+This version DOES NOT have:
+
+    A cleanly patched setup.S, alas;  I upgraded my 2.3.39 kernel to
+    2.3.40-4, by patching up to 2.3.40-4, then reversing out the 2.3.39=
+
+    smap patch.  That broken in setup.S, leaving me with a patch that's=
+
+    partially against the 2.3.39 baseline and partially against the
+    2.3.39 patch.  Sigh.
+
+    No smap=3D/kmem=3D in it.
+    No sorting bios[] for doing an exhaustive overlap check.
+    No discarding bios[] and repopulating it with the contents of
+    smap=3D/kmem=3D.
+
+    No exhaustive testing on my 30 or so bioses -- none of the setup.S
+    detect logic has changed, so I'm not worrying about bitrot just yet=
+=2E
+
+
+    -david parsons
+--Hello, Sailor
+Content-Disposition: inline; filename="2340-4.diff"
+Content-type: text/plain; name="2340-4.diff"
+Content-transfer-encoding: quoted-printable
+
+--- ./include/asm-i386/e820.h.orig	Fri Jan 28 13:57:53 2000
++++ ./include/asm-i386/e820.h	Sat Jan 29 10:05:12 2000
+@@ -5,16 +5,19 @@
+  * In a nutshell, arch/i386/boot/setup.S populates a scratch table
+  * in the empty_zero_block that contains a list of usable address/size=
+
+  * duples.   In arch/i386/kernel/setup.c, this information is
+- * transferred into the e820map, and in arch/i386/mm/init.c, that
+- * new information is used to mark pages reserved or not.
++ * transferred into the bios[], then converted into a list of valid
++ * memory regions in region[], and that new information is used in
++ * arch/i386/mm/init.c to mark pages available or not.
+  *
+  */
+ #ifndef __E820_HEADER
+ #define __E820_HEADER
+ =
+
+-#define E820MAP	0x2d0		/* our map */
+-#define E820MAX	32		/* number of entries in E820MAP=
+ */
+-#define E820NR	0x1e8		/* # entries in E820MAP */
++#define FLAG_E820_DEBUG	1
++
++#define E820MAP		0x2d0	/* our map */
++#define E820MAX		32	/* number of entries in E820MAP=
+ */
++#define E820NR		0x1e8	/* # entries in E820MAP */
+ =
+
+ #define E820_RAM	1
+ #define E820_RESERVED	2
+@@ -23,18 +26,69 @@
+ =
+
+ #define HIGH_MEMORY	(1024*1024)
+ =
+
++/* HACK: These macros map between page numbers and physical addresses.=
+
++ * They used to be in arch/i386/kernel/setup.c, but have been moved he=
+re
++ * so that they can also be used in arch/i386/mm/init.c.
++ */
++#define PFN_UP(x)	(((x) + PAGE_SIZE-1) >> PAGE_SHIFT)
++#define PFN_DOWN(x)	((x) >> PAGE_SHIFT)
++#define PFN_PHYS(x)	((x) << PAGE_SHIFT)
++
++/* CONFIG_E820_PARANOID enables a whole bunch of error checking regula=
+ted
++ * by CHK_E820_x #defines.  If disabled, they all default to zero, but=
+ can
++ * be hand-edited to put in whatever sort of checking you might want.
++ */
++#ifdef CONFIG_E820_PARANOID
++#  define FLAG_E820_PARANOID	1	/* check that es:di is invarian=
+t */
++#  define FLAG_E820_WRAP	1	/* check that start+size <=3D 6=
+4 bits */
++#  define FLAG_E820_LENGTH	1	/* comment on length !=3D 20 re=
+turns */
++#  define FLAG_E820_GULLIBLE	0	/* if e820 says that memory in =
+the
++					 * 0A000-010000 region is okay,=
+ believe
++					 * it. */
++#else
++#  define FLAG_E820_PARANOID	0
++#  define FLAG_E820_WRAP	0
++#  define FLAG_E820_LENGTH	0
++#  define FLAG_E820_GULLIBLE	0
++#endif
++
++/* FLAG_E820_RECLAIM tells add_memory_region/check_memory_region to
++ * attempt to use E820 reclaim memory sections.  To have reclaim work,=
+
++ * you need to configure it on, PLUS ACPI needs to be turned off.
++ */
++#if CONFIG_ACPI
++#  define FLAG_E820_RECLAIM	0
++#else
++#  define FLAG_E820_RECLAIM	CONFIG_E820_RECLAIM
++#endif
++
+ #ifndef __ASSEMBLY__
+ =
+
+-struct e820map {
+-    int nr_map;
+-    struct {
+-	long long addr;		/* start of memory segment */
+-	long long size;		/* size of memory segment */
+-	long type;		/* type of memory segment */
+-    } map[E820MAX];
+-};
++struct e820 {
++    __u64 addr;	/* addr,size,type are returned by e820 bios cal=
+l */
++    __u64 size;
++    __u32 type;
++    __u16 len;	/* %ecx(out) from the e820 bios call */
++} __attribute__ ((__packed__));
++
++struct physical_region {
++    __u64 start;
++    __u64 end;
++} ;
++
++struct physical_memory {
++    int p_flags;	/* declare sizeof(int) > 3 bytes */
++#define CHK_PMEM_LENGTH		0x01		/* user-settabl=
+e in smap=3D */
++#define CHK_PMEM_GULLIBLE	0x02		/* command line */
++#define CHK_PMEM_RECLAIM	0x04
++
++    int nr_bios;				/* bios[] holds memory =
+region */
++    int nr_region;				/* region[] holds valid=
+ mem */
++    struct e820 bios[E820MAX];			/* returned by the bios=
+ */
++    struct physical_region region[E820MAX];	/* that we want to allo=
+cate */
++} ;
+ =
+
+-extern struct e820map e820;
++extern struct physical_memory physical_memory;
+ #endif/*!__ASSEMBLY__*/
+ =
+
+ #endif/*__E820_HEADER*/
+--- ./arch/i386/boot/setup.S.orig	Fri Jan 28 13:57:53 2000
++++ ./arch/i386/boot/setup.S	Sat Jan 29 10:05:36 2000
+@@ -27,6 +27,9 @@
+  * Video handling moved to video.S by Martin Mares, March 1996
+  * <mj@k332.feld.cvut.cz>
+  *
++ * Extended memory detection made more paranoid by orc@pell.chi.il.us =
+(david
++ * parsons) and Nathan Zook (nathan.zook@amd.com), December 1999.
++ *
+  * Extended memory detection scheme retwiddled by orc@pell.chi.il.us (=
+david
+  * parsons) to avoid loadlin confusion, July 1997
+  *
+@@ -284,19 +287,16 @@
+  * (end of memory map). The e820 map is abandoned if %ecx < 20 or
+  * %ecx > 255 bytes (we want 20 bytes, but e820 has been taken into
+  * the ACPI spec, which is apparently veery vague about whether it
+- * will adhere to transferring 20 bytes like it the spec says) or
++ * will adhere to transferring 20 bytes like the spec says) or
+  * %eax !=3D 'SMAP' (the call is supposed to copy %edx over to %eax.)
+  *
+  * The paranoid level of sanity checking also saves ds over the call,
+  * in case this is some malicious bios the eats registers that it's
+  * not supposed to, and it abandons the e820 map if es:di change over
+  * the course of the call (the memory buffer is passed in via es:di,
+- * and should not be randomly shuffled around)
+- *
+- * If NATHAN is defined, the bios[] map is converted from start/size
+- * to start/end, and a further paranoia check is enabled:  if start+si=
+ze
+- * is >64 bits, e820 has gone rogue and is returning garbage, so the
+- * e820 scan is punted on the spot.
++ * and should not be randomly shuffled around; Ralf Brown's interrupt
++ * list doesn't say anything about it, so punting if it changes is a
++ * good way of dealing with incompetent ACPI implemenations)
+  *
+  * In any case, we stash %ecx at the end of the record (rec+20) so
+  * the kernelside can use it in further sanity checks.
+@@ -313,7 +313,7 @@
+ 	movl	$0x0000e820, %eax	# e820, upper word zeroed
+ 	movl	$20, %ecx		# 20 bytes is what we want.
+ =
+
+-#ifdef CONFIG_E820_PARANOID
++#ifdef FLAG_E820_PARANOID
+ 	pushw	%ds
+ 	pushw	%di			# stash %di into %dx
+ 	int	$0x15			# make the call
+@@ -348,16 +348,13 @@
+ 	jnl	abort820
+ =
+
+ =
+
+-#if CONFIG_E820_PARANOID
++#if FLAG_E820_PARANOID
+ /*
+  * Then check that es:di is still the same.
+  */
+ 	cmpw	%dx, %di		# %di should be constant.
+ 	jne	abort820
+ =
+
+-/*
+- * As should %es
+- */
+ 	movw	%es, %ax		# how about %es?
+ 	movw	%ds, %dx		# it should be =3D=3D %ds
+ 	cmpw	%ax, %dx
+@@ -374,11 +371,11 @@
+ =
+
+ 	incb	(E820NR)		# up the # of records
+ 	movw	%cx, %es:20(%di)	# stash recsize
+-#ifdef NATHAN
+ 	movl	%es:0(%di), %eax	# convert start/size to start/e=
+nd
+ 	movl	%es:4(%di), %ecx
+ 	add	%eax, %es:8(%di)
+ 	adc	%ecx, %es:12(%di)
++#ifdef FLAG_E820_WRAP
+ 	jc	abort820		# start+size > 64 bits?  Oops
+ #endif
+ 	movw	%di, %ax		# point %es:%di at the next
+--- ./arch/i386/mm/init.c.orig	Fri Jan 28 13:57:53 2000
++++ ./arch/i386/mm/init.c	Fri Jan 28 13:58:02 2000
+@@ -522,21 +522,11 @@
+ {
+ 	int i;
+ =
+
+-	for (i =3D 0; i < e820.nr_map; i++) {
+-		unsigned long addr, end;
+-
+-		if (e820.map[i].type !=3D E820_RAM)	/* not usable m=
+emory */
+-			continue;
+-		/*
+-		 *	!!!FIXME!!! Some BIOSen report areas as RAM tha=
+t
+-		 *	are not. Notably the 640->1Mb area. We need a s=
+anity
+-		 *	check here.
+-		 */
+-		addr =3D (e820.map[i].addr+PAGE_SIZE-1) >> PAGE_SHIFT;
+-		end =3D (e820.map[i].addr+e820.map[i].size) >> PAGE_SHI=
+FT;
+-		if  ((pagenr >=3D addr) && (pagenr < end))
++	for (i =3D 0; i < physical_memory.nr_region; i++)
++		if (pagenr >=3D PFN_UP(physical_memory.region[i].start)=
+
++		    && pagenr < PFN_DOWN(physical_memory.region[i].end)=
+ )
+ 			return 1;
+-	}
++
+ 	return 0;
+ }
+ =
+
+--- ./arch/i386/kernel/setup.c.orig	Fri Jan 28 13:57:53 2000
++++ ./arch/i386/kernel/setup.c	Sat Jan 29 10:13:43 2000
+@@ -108,7 +108,7 @@
+ 	unsigned char table[0];
+ };
+ =
+
+-struct e820map e820 =3D { 0 };
++struct physical_memory physical_memory;
+ =
+
+ unsigned char aux_device_present;
+ =
+
+@@ -131,6 +131,10 @@
+ #define ALT_MEM_K (*(unsigned long *) (PARAM+0x1e0))
+ #define E820_MAP_NR (*(char*) (PARAM+E820NR))
+ #define E820_MAP    ((unsigned long *) (PARAM+E820MAP))
++
++#define Region	physical_memory.region
++#define Bios	physical_memory.bios
++
+ #define APM_BIOS_INFO (*(struct apm_bios_info *) (PARAM+0x40))
+ #define DRIVE_INFO (*(struct drive_info_struct *) (PARAM+0x80))
+ #define SYS_DESC_TABLE (*(struct sys_desc_table_struct*)(PARAM+0xa0))
+@@ -382,94 +386,301 @@
+ 		ret <<=3D 20;
+ 		(*retptr)++;
+ 	}
++	else if (**retptr =3D=3D 'G' || **retptr =3D=3D 'g') {
++		ret <<=3D 30;
++		(*retptr)++;
++	}
+ 	return ret;
+ } /* memparse */
+ =
+
+ =
+
+-void __init add_memory_region(unsigned long start,
+-                                  unsigned long size, int type)
++enum region_flags { RF_RECLAIM =3D0x01,
++                    RF_NOT_RAM =3D0x02,
++		    RF_OVERFLOW=3D0x04,
++		    RF_ZERO    =3D0x08,
++		    RF_MERGED  =3D0x10,
++		    RF_ADDED   =3D0x20 } ;
++
++enum region_flags __init add_memory_region(__u64 start, __u64 end, __u=
+32 type)
+ {
+-	int x =3D e820.nr_map;
++    int i, x;
++    enum region_flags flag =3D 0;
+ =
+
+-	if (x =3D=3D E820MAX) {
+-	    printk("Ooops! Too many entries in the memory map!\n");
+-	    return;
+-	}
++#ifdef FLAG_E820_RECLAIM
++    if ( (physical_memory.p_flags & CHK_PMEM_RECLAIM) && (type =3D=3D =
+E820_ACPI) )
++	flag |=3D RF_RECLAIM;
++    else if (type !=3D E820_RAM)
++	return RF_NOT_RAM;
++#else
++    if (type !=3D E820_RAM)
++	return RF_NOT_RAM;
++#endif
++
++    if (start =3D=3D end)
++	return flag|RF_ZERO;
+ =
+
+-	e820.map[x].addr =3D start;
+-	e820.map[x].size =3D size;
+-	e820.map[x].type =3D type;
+-	e820.nr_map++;
++#ifdef CONFIG_E820_MERGE
++    /* see if we can merge this region with an existing one */
++
++    for (x=3D0; x < physical_memory.nr_region; x++)
++	if (end =3D=3D Region[x].start) {
++	    /* glue memory region onto the start of this one */
++	    Region[x].start =3D start;
++	    break;
++	}
++	else if (Region[x].end =3D=3D start) {
++	    /* glue memory region onto the end of this one */
++	    Region[x].end =3D end;
++	    break;
++	}
++    if (x < physical_memory.nr_region) {
++	/* If we've merged a region, check to see if the new region
++	 * want to merge with anyone else.
++	 */
++	if (x > 0 && Region[x].start =3D=3D Region[x-1].end) {
++	    Region[x-1].end =3D Region[x].end;
++	    for (i=3Dx; i < physical_memory.nr_region; i++)
++		Region[x] =3D Region[x+1];
++	    physical_memory.nr_region--;
++	    x--;
++	}
++	if (x < physical_memory.nr_region-1 && Region[x].end =3D=3D Reg=
+ion[x+1].start) {
++	    Region[x].end =3D Region[x+1].end;
++	    for (i=3Dx+1; i < physical_memory.nr_region-1; i++)
++		Region[x] =3D Region[x+1];
++	    physical_memory.nr_region--;
++	}
++	else
++	    return flag|RF_MERGED;
++    }
++#endif
++
++    if (physical_memory.nr_region =3D=3D E820MAX)
++	return flag|RF_OVERFLOW;
++
++    /* insert the new region in order */
++    for (x=3D0; x < physical_memory.nr_region; x++)
++	if (end < Region[x].start) {
++	    /* add it in here */
++	    for (i=3Dphysical_memory.nr_region; i>x; --i)
++		Region[i] =3D Region[i-1];
++	    Region[x].start =3D start;
++	    Region[x].end   =3D end;
++	    physical_memory.nr_region++;
++	    return flag|RF_ADDED;
++	}
++    Region[physical_memory.nr_region].start =3D start;
++    Region[physical_memory.nr_region].end   =3D end;
++    physical_memory.nr_region++;
++    return flag|RF_ADDED;
+ } /* add_memory_region */
+ =
+
+ =
+
++#define GIGABYTE(x)	((x) * 1024LL * 1024LL * 1024LL)
++#ifdef FLAG_E820_DEBUG
++#  define E820DBG(x)	printk x
++#else
++#  define E820DBG(x)	=
+
++#endif
++
+ /*
+  * Do NOT EVER look at the BIOS memory size location.
+  * It does not work on many machines.
+  */
+-#define LOWMEMSIZE()	(0x9f000)
++#define LOWMEMSIZE()	(639 * 1024)
+ =
+
+-void __init setup_memory_region(void)
++
++void
++report(enum region_flags code)
+ {
+-#define E820_DEBUG	1
+-#ifdef E820_DEBUG
+-	int i;
+-#endif
++    if (code & RF_RECLAIM)
++	printk(" reclaimed");
++    if (code & RF_ADDED)
++	printk(" added");
++    if (code & RF_MERGED)
++	printk(" merged");
++    if (code & RF_OVERFLOW)
++	printk(" overflow");
++    if (code & RF_NOT_RAM)
++	printk(" rom");
++    if (code & RF_ZERO)
++	printk(" zero-length");
++}
+ =
+
+-	/*
+-	 * If we're lucky and live on a modern system, the setup code
+-	 * will have given us a memory map that we can use to properly
+-	 * set up memory.  If we aren't, we'll fake a memory map.
+-	 *
+-	 * We check to see that the memory map contains at least 2 elem=
+ents
+-	 * before we'll use it, because the detection code in setup.S m=
+ay
+-	 * not be perfect and most every PC known to man has two memory=
+
+-	 * regions: one from 0 to 640k, and one from 1mb up.  (The IBM
+-	 * thinkpad 560x, for example, does not cooperate with the memo=
+ry
+-	 * detection code.)
+-	 */
+-	if (E820_MAP_NR > 1) {
+-		/* got a memory map; copy it into a safe place.
+-		 */
+-		e820.nr_map =3D E820_MAP_NR;
+-		if (e820.nr_map > E820MAX)
+-			e820.nr_map =3D E820MAX;
+-		memcpy(e820.map, E820_MAP, e820.nr_map * sizeof e820.ma=
+p[0]);
+-#ifdef E820_DEBUG
+-		for (i=3D0; i < e820.nr_map; i++) {
+-			printk("e820: %08x @ %08x ", (int)e820.map[i].s=
+ize,
+-						(int)e820.map[i].addr);=
+
+-			switch (e820.map[i].type) {
+-			case E820_RAM:	printk("(usable)\n");
+-					break;
+-			case E820_RESERVED:
+-					printk("(reserved)\n");
+-					break;
+-			case E820_ACPI:
+-					printk("(ACPI data)\n");
+-					break;
+-			case E820_NVS:
+-					printk("(ACPI NVS)\n");
+-					break;
+-			default:	printk("type %lu\n", e820.map[i=
+].type);
+-					break;
+-			}
+-		}
++
++/*
++ * region_check() validates the physical_memory map, plus lops out mem=
+ory
++ * that lives in suspicious places.
++ */
++int __init
++region_check()
++{
++    unsigned int x, i;
++
++    for (x=3D0; x < physical_memory.nr_region; x++) {
++	if (x < physical_memory.nr_region-1
++		&& Region[x].end >=3D Region[x+1].start) {
++	    printk("SMAP: region %d (%010Lx - %010Lx) overlaps region %=
+d (%010Lx - %010Lx) -- map dropped\n",
++		    x, Region[x].start,
++		       Region[x].end,
++		    x+1, Region[x+1].start,
++			 Region[x+1].end);
++	    return 1;
++	}
++#if FLAG_E820_GULLIBLE
++	if (physical_memory.p_flag & CHK_PMEM_GULLIBLE)
++	    continue;
+ #endif
++	if (Region[x].start >=3D GIGABYTE(4)) {
++	    E820DBG(("SMAP: region %010Lx - %010Lx dropped\n",
++			Region[x].start, Region[x].end));
++	    for (i=3Dx; i < physical_memory.nr_region; i++)
++		Region[i] =3D Region[i+1];
++	    x--;
++	    physical_memory.nr_region--;
++	    continue;
++	}
++
++	if (Region[x].end > GIGABYTE(4)) {
++	    E820DBG(("SMAP: region %010Lx - %010Lx truncated to %010Lx =
+- %010Lx\n",
++		    Region[x].start, Region[x].end, Region[x].start,
++		    GIGABYTE(4)));
++	    Region[x].end =3D GIGABYTE(4);
++	}
++
++	if (Region[x].start >=3D HIGH_MEMORY || Region[x].end <=3D LOWM=
+EMSIZE())
++	    continue;
++
++	if (Region[x].start >=3D LOWMEMSIZE()) {
++	    if (Region[x].end < HIGH_MEMORY) {
++		E820DBG(("%010Lx - %010Lx dropped\n",
++			Region[x].start, Region[x].end));
++		for (i=3Dx; i < physical_memory.nr_region; i++)
++		    Region[i] =3D Region[i+1];
++		x--;
++		physical_memory.nr_region--;
++	    }
++	    else {
++		E820DBG(("SMAP: %010Lx - %010Lx trimmed to %010lx - %01=
+0Lx\n",
++			Region[x].start, Region[x].end,
++			HIGH_MEMORY, Region[x].end));
++		Region[x].start =3D HIGH_MEMORY;
++	    }
++	}
++	else if (Region[x].end < HIGH_MEMORY) {
++	    E820DBG(("%010Lx - %010Lx trimmed to %010Lx - %010lx\n",
++		    Region[x].start, Region[x].end,
++		    Region[x].start, LOWMEMSIZE()));
++	    Region[x].end =3D LOWMEMSIZE();
+ 	}
+ 	else {
+-		/* otherwise fake a memory map; one section from 0k->64=
+0k,
+-		 * the next section from 1mb->appropriate_mem_k
+-		 */
+-		unsigned long mem_size;
++	    E820DBG(("%010Lx - %010Lx split to %x010Lx - 640k, 1m - %01=
+0Lx\n",
++		    Region[x].start, Region[x].end,
++		    Region[x].start, Region[x].end));
++	    for (i=3Dphysical_memory.nr_region; i > x; --i)
++		Region[i+1] =3D Region[i];
++
++	    Region[x+1].start =3D HIGH_MEMORY;
++	    Region[x+1].end =3D Region[x].end;
++	    Region[x].end =3D LOWMEMSIZE();
++	    x++;
++	    physical_memory.nr_region++;
++	}
++    }
++    return 0;
++} /* region_check */
+ =
+
+-		mem_size =3D (ALT_MEM_K < EXT_MEM_K) ? EXT_MEM_K : ALT_=
+MEM_K;
+ =
+
+-		add_memory_region(0, LOWMEMSIZE(), E820_RAM);
+-		add_memory_region(HIGH_MEMORY, mem_size << 10, E820_RAM=
+);
+-  	}
+-} /* setup_memory_region */
++void __init setup_memory_region(void)
++{
++    int i;
++    enum region_flags ret;
++    unsigned long mem_size;
++
++    /*
++     * If we're lucky and live on a modern system, the setup code
++     * will have given us a memory map that we can use to properly
++     * set up memory.  If we aren't, we'll fake a memory map.
++     *
++     * We check to see that the memory map contains at least 2 element=
+s
++     * before we'll use it, because the detection code in setup.S may
++     * not be perfect and most every PC known to man has two memory
++     * regions: one from 0 to 640k, and one from 1mb up.
++     */
++    if ( (E820_MAP_NR > 1) && (E820_MAP_NR < E820MAX) ) {
++	/* got a memory map; copy it into a safe place.
++	 */
++	physical_memory.p_flags =3D (FLAG_E820_LENGTH ? CHK_PMEM_LENGTH=
+ : 0)
++				| (FLAG_E820_GULLIBLE ? CHK_PMEM_GULLIB=
+LE : 0)
++				| (FLAG_E820_RECLAIM ? CHK_PMEM_RECLAIM=
+ : 0) ;
++	physical_memory.nr_bios =3D E820_MAP_NR;
++	memcpy(&(Bios), E820_MAP,
++		E820_MAP_NR * sizeof Bios[0]);
++	for (i=3D0; i < E820_MAP_NR; i++) {
++	    ret =3D add_memory_region(Bios[i].addr,
++				    Bios[i].size,
++				    Bios[i].type);
++#ifdef FLAG_E820_DEBUG
++	    printk("SMAP: %010Lx - %010Lx ",
++		    Bios[i].addr,
++		    Bios[i].size);
++
++	    switch (Bios[i].type) {
++	    case E820_RAM:	printk("(usable)");
++				break;
++	    case E820_RESERVED:
++				printk("(reserved)");
++				break;
++	    case E820_ACPI:
++				printk("(ACPI data)");
++				break;
++	    case E820_NVS:
++				printk("(ACPI NVS)");
++				break;
++	    default:
++				printk("(type %lu)",
++				    Bios[i].type);
++				break;
++	    }
++#if FLAG_E820_LENGTH
++	    if ( (physical_memory.p_flags & CHK_PMEM_LENGTH) &&
++		 (Bios[i].len !=3D E820_RECSIZE) )
++		printk(" [record is %d bytes long]",
++			    Bios[i].len);
+ =
+
++#endif
++	    report(ret);
++	    printk("\n");
++#else
++	    if (ret & RF_OVERFLOW) {
++		printk("SMAP: table overflow -- reverting to old-style =
+memory detection\n");
++		goto oldstyle;
++	    }
++#endif
++	}
++	/* after putting in the e820 map, massage it into shape
++	 * for use by the kernel.  If region_check returns anything
++	 * except 0, something is very ill in the state of the
++	 * bios map.
++	 */
++	if (region_check() =3D=3D 0)
++	    return /* the map is fine, so we'll use it */;
++    }
++
++oldstyle:
++    /* otherwise fake a memory map; one section from 0k->640k,
++     * the next section from 1mb->appropriate_mem_k
++     */
++
++    physical_memory.nr_region =3D 0;
++    physical_memory.p_flags =3D 0;
++
++    mem_size =3D (ALT_MEM_K < EXT_MEM_K) ? EXT_MEM_K : ALT_MEM_K;
++
++    add_memory_region(0, LOWMEMSIZE(), E820_RAM);
++    add_memory_region(HIGH_MEMORY,
++		      HIGH_MEMORY + (mem_size << 10), E820_RAM);
++} /* setup_memory_region */
+ =
+
+ static inline void parse_mem_cmdline (char ** cmdline_p)
+ {
+@@ -507,7 +718,7 @@
+ 					 * and reinitialize it with the=
+
+ 					 * standard low-memory region.
+ 					 */
+-					e820.nr_map =3D 0;
++					physical_memory.nr_region =3D 0=
+;
+ 					usermem =3D 1;
+ 					add_memory_region(0, LOWMEMSIZE=
+(), E820_RAM);
+ 				}
+@@ -575,10 +786,6 @@
+ =
+
+ 	parse_mem_cmdline(cmdline_p);
+ =
+
+-#define PFN_UP(x)	(((x) + PAGE_SIZE-1) >> PAGE_SHIFT)
+-#define PFN_DOWN(x)	((x) >> PAGE_SHIFT)
+-#define PFN_PHYS(x)	((x) << PAGE_SHIFT)
+-
+ /*
+  * 128MB for vmalloc and initrd
+  */
+@@ -594,21 +801,16 @@
+ 	start_pfn =3D PFN_UP(__pa(&_end));
+ =
+
+ 	/*
+-	 * Find the highest page frame number we have available
+-	 */
+-	max_pfn =3D 0;
+-	for (i =3D 0; i < e820.nr_map; i++) {
+-		unsigned long start, end;
+-		/* RAM? */
+-		if (e820.map[i].type !=3D E820_RAM)
+-			continue;
+-		start =3D PFN_UP(e820.map[i].addr);
+-		end =3D PFN_DOWN(e820.map[i].addr + e820.map[i].size);
+-		if (start >=3D end)
+-			continue;
+-		if (end > max_pfn)
+-			max_pfn =3D end;
+-	}
++  	 * Find the highest page frame number we have available
++  	 */
++  	max_pfn =3D 0;
++ 	for (i =3D 0; i < physical_memory.nr_region; i++) {
++  		unsigned long start, end;
++		start =3D PFN_UP(Region[i].start);
++ 		end =3D PFN_DOWN(Region[i].end);
++  		if ( (start < end) && (end > max_pfn) )
++  			max_pfn =3D end;
++  	}
+ =
+
+ 	/*
+ 	 * Determine low and high memory ranges:
+@@ -651,23 +853,19 @@
+ 	/*
+ 	 * Register fully available low RAM pages with the bootmem allo=
+cator.
+ 	 */
+-	for (i =3D 0; i < e820.nr_map; i++) {
++	for (i =3D 0; i < physical_memory.nr_region; i++) {
+ 		unsigned long curr_pfn, last_pfn, size;
+- 		/*
+-		 * Reserve usable low memory
+-		 */
+-		if (e820.map[i].type !=3D E820_RAM)
+-			continue;
++
+ 		/*
+ 		 * We are rounding up the start address of usable memor=
+y:
+ 		 */
+-		curr_pfn =3D PFN_UP(e820.map[i].addr);
++		curr_pfn =3D PFN_UP(Region[i].start);
+ 		if (curr_pfn >=3D max_low_pfn)
+ 			continue;
+ 		/*
+ 		 * ... and at the end of the usable range downwards:
+ 		 */
+-		last_pfn =3D PFN_DOWN(e820.map[i].addr + e820.map[i].si=
+ze);
++		last_pfn =3D PFN_DOWN(Region[i].end);
+ =
+
+ 		if (last_pfn > max_low_pfn)
+ 			last_pfn =3D max_low_pfn;
+@@ -737,30 +935,41 @@
+ 	 * and also for regions reported as reserved by the e820.
+ 	 */
+ 	probe_roms();
+-	for (i =3D 0; i < e820.nr_map; i++) {
++	for (i =3D 0; i < physical_memory.nr_region; i++) {
+ 		struct resource *res;
+-		if (e820.map[i].addr + e820.map[i].size > 0x100000000UL=
+L)
+-			continue;
+ 		res =3D alloc_bootmem_low(sizeof(struct resource));
+-		switch (e820.map[i].type) {
+-		case E820_RAM:	res->name =3D "System RAM"; break;
+-		case E820_ACPI:	res->name =3D "ACPI Tables"; break;
+-		case E820_NVS:	res->name =3D "ACPI Non-volatile Storag=
+e"; break;
+-		default:	res->name =3D "reserved";
+-		}
+-		res->start =3D e820.map[i].addr;
+-		res->end =3D res->start + e820.map[i].size - 1;
++		res->start =3D Region[i].start;
++		res->end   =3D Region[i].end-1;
+ 		res->flags =3D IORESOURCE_MEM | IORESOURCE_BUSY;
++		res->name  =3D "System RAM";
+ 		request_resource(&iomem_resource, res);
+-		if (e820.map[i].type =3D=3D E820_RAM) {
++		if (Bios[i].type =3D=3D E820_RAM) {
+ 			/*
+-			 *  We dont't know which RAM region contains ke=
+rnel data,
+-			 *  so we try it repeatedly and let the resourc=
+e manager
+-			 *  test it.
++			 *  We dont't know which RAM region contains th=
+e
++			 *  kernel data, so we try it repeatedly and le=
+t
++			 *  the resource manager test it.
+ 			 */
+ 			request_resource(res, &code_resource);
+ 			request_resource(res, &data_resource);
+ 		}
++	}
++	for (i =3D 0; i < physical_memory.nr_bios; i++) {
++		struct resource *res;
++		if (Bios[i].size > GIGABYTE(4))
++			continue;
++		if (Bios[i].type =3D=3D E820_RAM)
++			continue;
++
++		res =3D alloc_bootmem_low(sizeof(struct resource));
++		switch (Bios[i].type) {
++		case E820_ACPI:	res->name =3D "ACPI Tables"; break;
++		case E820_NVS:	res->name =3D "ACPI Non-volatile Storag=
+e"; break;
++		default:	res->name =3D "reserved";
++		}
++		res->start =3D Bios[i].addr;
++		res->end =3D Bios[i].size - 1;
++		res->flags =3D IORESOURCE_MEM | IORESOURCE_BUSY;
++		request_resource(&iomem_resource, res);
+ 	}
+ 	request_resource(&iomem_resource, &vram_resource);
+ =
+
+--- ./arch/i386/config.in.orig	Fri Jan 28 13:57:53 2000
++++ ./arch/i386/config.in	Sat Jan 29 01:03:29 2000
+@@ -61,6 +61,13 @@
+    define_bool CONFIG_X86_PAE y
+ fi
+ =
+
++bool 'Use bios call e820 to detect memory' CONFIG_MEM_E820
++if [ "$CONFIG_MEM_E820" =3D "y" ]; then
++    bool 'Merge adjacent memory regions' CONFIG_E820_MERGE
++    bool 'Reclaim ACPI table memory (DANGEROUS)' CONFIG_E820_RECLAIM
++fi
++bool 'Use bios call e801 to detect memory' CONFIG_MEM_E801
++
+ bool 'Math emulation' CONFIG_MATH_EMULATION
+ bool 'MTRR (Memory Type Range Register) support' CONFIG_MTRR
+ bool 'Symmetric multi-processing support' CONFIG_SMP
+--- ./arch/i386/defconfig.orig	Fri Jan 28 13:57:53 2000
++++ ./arch/i386/defconfig	Sat Jan 29 01:02:17 2000
+@@ -28,6 +28,10 @@
+ CONFIG_X86_GOOD_APIC=3Dy
+ CONFIG_X86_PGE=3Dy
+ CONFIG_NOHIGHMEM=3Dy
++CONFIG_MEM_E820=3Dy
++CONFIG_E820_MERGE=3Dy
++#CONFIG_MEM_RECLAIM is not set
++CONFIG_MEM_E801=3Dy
+ # CONFIG_HIGHMEM4G is not set
+ # CONFIG_HIGHMEM64G is not set
+ # CONFIG_MATH_EMULATION is not set
+--Hello, Sailor
+Content-Disposition: inline; filename="2340-4.dmesg"
+Content-type: text/plain; name="2340-4.dmesg"
+Content-transfer-encoding: quoted-printable
+
+Linux version 2.3.41 (root@k7) (gcc version 2.7.2.3) #32 Sat Jan 29 10:=
+13:58 PST 2000
+SMAP: 0000000000 - 000009fc00 (usable) added
+SMAP: 000009fc00 - 00000a0000 (reserved) rom
+SMAP: 00000f0000 - 0000100000 (reserved) rom
+SMAP: 00ffff0000 - 0100000000 (reserved) rom
+SMAP: 0000100000 - 0017ff0000 (usable) added
+SMAP: 0017ff3000 - 0018000000 (ACPI data) reclaimed added
+SMAP: 0017ff0000 - 0017ff3000 (ACPI NVS) rom
+Scan SMP from c0000000 for 1024 bytes.
+Scan SMP from c009fc00 for 1024 bytes.
+Scan SMP from c00f0000 for 65536 bytes.
+Scan SMP from c009fc00 for 4096 bytes.
+mapped APIC to ffffe000 (01000000)
+On node 0 totalpages: 00018000
+zone(0): 4096 pages.
+zone(1): 94208 pages.
+zone(2): 0 pages.
+Initializing CPU#0
+Detected 548950007 Hz processor.
+Console: colour VGA+ 80x25
+Calibrating delay loop... 547.23 BogoMIPS
+Memory: 383936k/393216k available (1304k kernel code, 8880k reserved, 1=
+21k data, 116k init, 0k highmem)
+Buffer-cache hash table entries: 32768 (order: 5, 131072 bytes)
+Page-cache hash table entries: 131072 (order: 7, 524288 bytes)
+L1 I Cache: 64K  L1 D Cache: 64K
+L2 Cache: 512K
+CPU: AMD AMD-K7(tm) Processor stepping 02
+Checking 386/387 coupling... OK, FPU using exception 16 error reporting=
+=2E
+Checking 'hlt' instruction... OK.
+Checking for popad bug... OK.
+POSIX conformance testing by UNIFIX
+mtrr: v1.35 (19990512) Richard Gooch (rgooch@atnf.csiro.au)
+PCI: PCI BIOS revision 2.10 entry at 0xfb480
+PCI: Using configuration type 1
+PCI: Probing PCI hardware
+Linux NET4.0 for Linux 2.3
+Based upon Swansea University Computer Society NET3.039
+NET4: Unix domain sockets 1.0/SMP for Linux NET4.0.
+NET4: Linux TCP/IP 1.0 for NET4.0
+IP Protocols: ICMP, UDP, TCP
+IP: routing cache hash table of 4096 buckets, 32Kbytes
+TCP: Hash tables configured (established 32768 bind 32768)
+Starting kswapd v1.6
+Serial driver version 4.91 (1999-11-17) with MANY_PORTS SHARE_IRQ DETEC=
+T_IRQ SERIAL_PCI PCI_IOMEM enabled
+ttyS00 at 0x03f8 (irq =3D 4) is a 16550A
+ttyS01 at 0x02f8 (irq =3D 3) is a 16550A
+RAMDISK driver initialized: 16 RAM disks of 0K size 1024 blocksize
+Uniform Multi-Platform E-IDE driver Revision: 6.30
+AMD7409: IDE controller on PCI bus 00 dev 39
+AMD7409: not 100% native mode: will probe irqs later
+    ide0: BM-DMA at 0xf000-0xf007, BIOS settings: hda:pio, hdb:pio
+    ide1: BM-DMA at 0xf008-0xf00f, BIOS settings: hdc:pio, hdd:pio
+Floppy drive(s): fd0 is 1.44M
+FDC 0 is a post-1991 82077
+scsi: ***** BusLogic SCSI Driver Version 2.1.15 of 17 August 1998 *****=
+
+scsi: Copyright 1995-1998 by Leonard N. Zubkoff <lnz@dandelion.com>
+scsi0: Configuring BusLogic Model BT-946C PCI SCSI Host Adapter
+scsi0:   Firmware Version: 4.25J, I/O Address: 0xE400, IRQ Channel: 10/=
+Level
+scsi0:   PCI Bus: 0, Device: 10, Address: Unassigned, Host Adapter SCSI=
+ ID: 7
+scsi0:   Parity Checking: Enabled, Extended Translation: Disabled
+scsi0:   Synchronous Negotiation: Fast, Wide Negotiation: Disabled
+scsi0:   Disconnect/Reconnect: Enabled, Tagged Queuing: Enabled
+scsi0:   Scatter/Gather Limit: 128 of 8192 segments, Mailboxes: 211
+scsi0:   Driver Queue Depth: 211, Host Adapter Queue Depth: 100
+scsi0:   Tagged Queue Depth: Automatic, Untagged Queue Depth: 3
+scsi0:   Error Recovery Strategy: Default, SCSI Bus Reset: Enabled
+scsi0:   SCSI Bus Termination: Enabled
+scsi0: *** BusLogic BT-946C Initialized Successfully ***
+scsi0 : BusLogic BT-946C
+scsi : 1 host.
+  Vendor: IBM       Model: DORS-32160        Rev: WA6A
+  Type:   Direct-Access                      ANSI SCSI revision: 02
+Detected scsi disk sda at scsi0, channel 0, id 0, lun 0
+  Vendor: MATSHITA  Model: CD-ROM CR-8008    Rev: 8.0h
+  Type:   CD-ROM                             ANSI SCSI revision: 02
+Detected scsi CD-ROM sr0 at scsi0, channel 0, id 1, lun 0
+  Vendor: MATSHITA  Model: CD-R   CW-7502    Rev: 4.10
+  Type:   CD-ROM                             ANSI SCSI revision: 02
+Detected scsi CD-ROM sr1 at scsi0, channel 0, id 2, lun 0
+  Vendor: YAMAHA    Model: CRW4260           Rev: 1.0f
+  Type:   CD-ROM                             ANSI SCSI revision: 02
+Detected scsi CD-ROM sr2 at scsi0, channel 0, id 3, lun 0
+scsi0: Target 0: Queue Depth 28, Synchronous at 10.0 MB/sec, offset 15
+scsi0: Target 1: Queue Depth 3, Synchronous at 10.0 MB/sec, offset 15
+scsi0: Target 2: Queue Depth 3, Synchronous at 10.0 MB/sec, offset 8
+scsi0: Target 3: Queue Depth 3, Asynchronous
+scsi : detected 3 SCSI cdroms 1 SCSI disk total.
+Uniform CD-ROM driver Revision: 3.06
+sr1: scsi3-mmc drive: 8x/8x writer xa/form2 cdda tray
+sr2: scsi3-mmc drive: 6x/6x writer cd/rw xa/form2 cdda tray
+SCSI device sda: hdwr sector=3D 512 bytes. Sectors=3D 4226725 [2063 MB]=
+ [2.1 GB]
+Partition check:
+ sda: sda1 sda2
+VFS: Mounted root (ext2 filesystem) readonly.
+Freeing unused kernel memory: 116k freed
+scsi0: Tagged Queuing now active for Target 0
+--Hello, Sailor
+Content-Disposition: inline; filename="2340-4.iomem"
+Content-type: text/plain; name="2340-4.iomem"
+Content-transfer-encoding: quoted-printable
+
+00000000-0009fbff : System RAM
+0009fc00-0009ffff : reserved
+000a0000-000bffff : Video RAM area
+000c0000-000c7fff : Video ROM
+000c8000-000cbfff : Extension ROM
+000f0000-000fffff : System ROM
+00100000-17feffff : System RAM
+17ff0000-17ff2fff : ACPI Non-volatile Storage
+17ff3000-17ffffff : System RAM
+d8000000-dfffffff : PCI device 1022:7006
+e0000000-e1ffffff : PCI Bus #01
+  e0000000-e0ffffff : PCI device 10de:0020
+e2000000-e2ffffff : PCI Bus #01
+  e2000000-e2ffffff : PCI device 10de:0020
+e5000000-e5000fff : PCI device 1022:7006
+e5001000-e50010ff : PCI device 11ad:0002
+e5002000-e5002fff : PCI device 1022:740c
+ffff0000-ffffffff : reserved
+--Hello, Sailor--
