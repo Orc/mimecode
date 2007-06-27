@@ -17,13 +17,10 @@ if AC_QUIET AC_CHECK_HEADERS basis/options.h; then
     fi
 fi
 
-echo "need_local_getopt is $need_local_getopt"
-
 if [ "$need_local_getopt" ]; then
     TLOG " (not found)"
     AC_SUB OPTIONS basis/options.c
     AC_CFLAGS="$AC_CFLAGS -I${AC_SRCDIR}"
-    echo "AC_CFLAGS = $AC_CFLAGS"
 else
     TLOG " (found)"
     AC_SUB OPTIONS ''

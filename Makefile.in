@@ -2,6 +2,7 @@
 # makefile for unravel
 #
 
+CC=@CC@
 CXX=@CC@
 CFLAGS += @CFLAGS@ -DVERSION=\"@VERSION@\"
 CXXFLAGS=$(CFLAGS)
