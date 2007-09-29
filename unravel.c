@@ -54,7 +54,7 @@ static int verbose = 0;		/* spit out needed debugging */
 static int writeoutput = 0;	/* write all valid fragments */
 static int sevenbit = 0;	/* force filenames to usascii */
 
-long savepoint = 0;
+char *pgm;
 
 #define Match(s,cst_p)	(strncasecmp(s, cst_p, sizeof(cst_p)-1) == 0)
 #define Cstrdup(s, cst_p) (Match(s, cst_p) ? strdup(skipwhite(s+sizeof(cst_p)-1)) : 0)
@@ -68,7 +68,7 @@ xfgetline(char *bfr, int len, FILE *fd)
     char *ret;
     int size;
 
-    savepoint = ftell(fd);
+    /*savepoint = ftell(fd);*/
     if (ret = fgets(bfr, len, fd)) {
 	size = strlen(bfr);
 	if (size > 0 && bfr[size-1] == '\n') {
@@ -222,7 +222,7 @@ read_headers(FILE* input, struct interesting_headers* info)
     }
     if (gotheaders)
 	info->headers_are_valid = 1;
-    fseek(input, savepoint, SEEK_SET);
+    /*fseek(input, savepoint, SEEK_SET);*/
     return 1;
 } /* read_headers */
 
@@ -321,6 +321,20 @@ writechar(struct about *io, char ch)
 }
 
 
+static void
+namefile(struct about *io, char *wanted, char *actual)
+{
+    if (wanted) {
+	fprintf(stderr, "%s ", wanted);
+	if (io->output && (wanted == 0 || strcmp(wanted, actual) != 0)) {
+	    if (wanted)
+		fprintf(stderr, "-> ");
+	    fprintf(stderr,"%s ", actual);
+	}
+    }
+}
+
+
 /*
  * read_section() reads lines until we find a boundary or EOF
  */
@@ -339,13 +353,7 @@ read_section(FILE* input, Encoder *translator, char* filename)
     io.input = input;
     io.linecount = 0;
 
-    if (filename)
-	fprintf(stderr, "%s ", filename);
-    if (io.output && (filename == 0 || strcmp(filename, actualname) != 0)) {
-	if (filename)
-	    fprintf(stderr, "-> ");
-	fprintf(stderr,"%s ", actualname);
-    }
+    namefile(&io,filename,actualname);
 
     if ( (*translator->decode)(readline, writechar, &io) == -1 ) {
 	perror("decode");
@@ -418,6 +426,14 @@ fixfilename(char *fn)
 } /* fixfilename */
 
 
+static void
+baduueheader()
+{
+    fprintf(stderr, "%s: malformed uuencode ``begin'' line\n", pgm);
+    exit(1);
+}
+
+
 /*
  * uud: picks apart a single-part uuencoded message, ignoring headers
  *      and separators and everything.  This is backwards compatability
@@ -427,15 +443,44 @@ void
 uud(FILE *input)
 {
     struct about io;
+    char line[1024];
+    char *p, *filename, *actualname;
+    unsigned int perms = 0644;
 
-    io.input = input;
-    io.output = stdout;
-    io.linecount = 0;
+    while (xfgetline(input, line, sizeof line))
+	if (strncasecmp(line, "begin ", 6) == 0) {
+	    perms = (unsigned int)strtol(line+6, &p, 8);
 
-    (uuencode.decode)(readline,writechar,&io);
+	    if (p == line+6) baduueheader();
+
+	    perms &= 0777;	/* mask off unwanted mode bits */
+
+	    while (isspace(*p)) ++p;
+	    if (p == '"') {
+		filename = ++p;
+		if (p = strchr(p, '"'))
+		    *p = 0;
+		else baduueheader();
+	    }
+	    else filename = p;
+
+	    if (*filename == 0) baduueheader();
+
+	    actualname = alloca(strlen(filename)+20);
+
+	    io.input = input;
+	    io.output = openfile(filename, actualname);
+	    io.linecount = 0;
+
+	    namefile(&io, filename, actualname);
+
+	    (uuencode.decode)(readline,writechar,&io);
     
-    if (isatty(1))
-	fprintf(stderr, "[%d line%s]\n", io.linecount, (io.linecount==1)?"":"s");
+	    if (isatty(1))
+		fprintf(stderr, "[%d line%s]\n",
+				io.linecount,
+				(io.linecount==1)?"":"s");
+	}
 } /* uud */
 
 
@@ -560,7 +605,6 @@ struct x_option options[] = {
 main(int argc, char **argv)
 {
     int opt;
-    char *pgm;
 
     x_opterr = 1;
 

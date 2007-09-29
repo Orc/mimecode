@@ -69,54 +69,40 @@ uudecode(mimeread read, mimewrite write, void *ctx)
     char text[512];
     int size;
 
-    enum {NEEDBEGIN, DECODING, FINISHED} state  = NEEDBEGIN;
-
     while ( (size = (*read)(ctx, text, sizeof text)) > 0 ) {
-	switch (state) {
-	case NEEDBEGIN:
-	    if (strncmp(text, "begin ", 6) == 0)
-		state = DECODING;
-	    break;
-	case DECODING:
-	    /* trim \r\n off the end of the string */
-	    for (p=text; *p != '\r' && *p != '\n' && *p; ++p)
-		;
-	    *p = 0;
 
-	    if (strcmp(text, "end") == 0) {
-		state = FINISHED;
-		break;
+	if (strncasecmp(text, "end", 3) == 0)
+	    break;
+
+	/*
+	 * `n' is used to avoid writing out all the characters
+	 * at the end of the file.
+	 */
+	if ((n = DEC(*text)) <= 0)
+	    break;
+	for (p = text; n > 0; p += 4, n -= 3) {
+	    if (n >= 3) {
+		ch = DEC(p[0]) << 2 | DEC(p[1]) >> 4;
+		Write(ctx,ch);
+		ch = DEC(p[1]) << 4 | DEC(p[2]) >> 2;
+		Write(ctx,ch);
+		ch = DEC(p[2]) << 6 | DEC(p[3]);
+		Write(ctx,ch);
 	    }
-	    /*
-	     * `n' is used to avoid writing out all the characters
-	     * at the end of the file.
-	     */
-	    if ((n = DEC(*text)) <= 0)
-		break;
-	    for (p = text; n > 0; p += 4, n -= 3)
-		if (n >= 3) {
+	    else {
+		if (n >= 1) {
 		    ch = DEC(p[0]) << 2 | DEC(p[1]) >> 4;
 		    Write(ctx,ch);
+		}
+		if (n >= 2) {
 		    ch = DEC(p[1]) << 4 | DEC(p[2]) >> 2;
 		    Write(ctx,ch);
+		}
+		if (n >= 3) {
 		    ch = DEC(p[2]) << 6 | DEC(p[3]);
 		    Write(ctx,ch);
 		}
-		else {
-		    if (n >= 1) {
-			ch = DEC(p[0]) << 2 | DEC(p[1]) >> 4;
-			Write(ctx,ch);
-		    }
-		    if (n >= 2) {
-			ch = DEC(p[1]) << 4 | DEC(p[2]) >> 2;
-			Write(ctx,ch);
-		    }
-		    if (n >= 3) {
-			ch = DEC(p[2]) << 6 | DEC(p[3]);
-			Write(ctx,ch);
-		    }
-		}
-		break;
+	    }
 	}
     }
     return 0;
