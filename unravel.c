@@ -463,7 +463,7 @@ uud(FILE *input)
 	    perms &= 0777;	/* mask off unwanted mode bits */
 
 	    while (isspace(*p)) ++p;
-	    if (p == '"') {
+	    if (*p == '"') {
 		filename = ++p;
 		if (p = strchr(p, '"'))
 		    *p = 0;
