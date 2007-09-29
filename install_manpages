@@ -32,7 +32,6 @@ for manpage in $*; do
 	# just copy it over
 	#
 	install -c -m 444 $manpage $DEST/man$EXT
-	chown man.man $DEST/man$EXT/$manpage
     elif [ -h $manpage ]; then
 	# build a link to an existing manpage
 	#
@@ -40,7 +39,6 @@ for manpage in $*; do
 	if [ $? -eq 0 ]; then
 	    echo ".so $LINK" > $$
 	    install -m 444 $$ $DEST/man$EXT/$manpage
-	    chown man.man $DEST/man$EXT/$manpage
 	    rm -f $$
 	else
 	    rc=1

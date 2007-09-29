@@ -31,13 +31,9 @@ distclean spotless: clean
 install: install.bin install.man
 
 install.bin: $(PROGS)
-	install -o bin -g bin -d $(BINDIR)
-	install -o bin -g bin -m 511 -c -s $(PROGS) $(BINDIR)
-	ln -fs unravel $(BINDIR)/uudecode
+	@INSTALL_DIR@ $(TARGET)$(BINDIR)
+	@INSTALL_PROGRAM@ $(PROGS) $(TARGET)$(BINDIR)
+	ln -fs unravel $(TARGET)$(BINDIR)/uudecode
 
 install.man: install_manpages $(MANPAGES)
-	./install_manpages $(MANDIR) $(MANPAGES)
-
-install_manpages:
-	get install_manpages
-
+	./install_manpages $(MANDIR) $(TARGET)$(MANPAGES)
