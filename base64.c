@@ -132,19 +132,19 @@ struct mime_encoding base64 = {
 #ifdef TEST
 
 int
-b64fread(b64context *ctx, char *block, int size)
+b64fread(context *ctx, char *block, int size)
 {
     return fread(block, 1, size, ctx->input);
 }
 
 int
-b64putc(b64context *ctx, char ch)
+b64putc(context *ctx, char ch)
 {
     return fputc(ch, ctx->output);
 }
 
 int
-b64gets(b64context *ctx, char *line, int size)
+b64gets(context *ctx, char *line, int size)
 {
     return fgets(line,size,ctx->input) ? strlen(line) : -1;
 }

@@ -80,7 +80,7 @@ uudecode(mimeread read, mimewrite write, void *ctx)
 	 */
 	if ((n = DEC(*text)) <= 0)
 	    break;
-	for (p = text; n > 0; p += 4, n -= 3) {
+	for (p = 1+text; n > 0; p += 4, n -= 3) {
 	    if (n >= 3) {
 		ch = DEC(p[0]) << 2 | DEC(p[1]) >> 4;
 		Write(ctx,ch);

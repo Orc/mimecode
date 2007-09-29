@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #include <string.h>
 #include <basis/options.h>
@@ -51,13 +52,30 @@ static int nrbound = 0;
 static int sp = 0;
 
 static int verbose = 0;		/* spit out needed debugging */
-static int writeoutput = 0;	/* write all valid fragments */
+static int savethemall = 0;	/* write all valid fragments */
 static int sevenbit = 0;	/* force filenames to usascii */
+
+static char *outputfile = 0;	/* fixed output file for uudecode */
 
 char *pgm;
 
 #define Match(s,cst_p)	(strncasecmp(s, cst_p, sizeof(cst_p)-1) == 0)
 #define Cstrdup(s, cst_p) (Match(s, cst_p) ? strdup(skipwhite(s+sizeof(cst_p)-1)) : 0)
+
+
+static void
+error(char *fmt, ...)
+{
+    va_list ptr;
+
+    va_start(ptr, fmt);
+    fprintf(stderr, "%s: ", pgm);
+    vfprintf(stderr, fmt, ptr);
+    fputc('\n', stdout);
+    va_end(ptr);
+    exit(1);
+}
+
 
 /*
  * xfgetline() gets a line and strips carriage control
@@ -426,14 +444,6 @@ fixfilename(char *fn)
 } /* fixfilename */
 
 
-static void
-baduueheader()
-{
-    fprintf(stderr, "%s: malformed uuencode ``begin'' line\n", pgm);
-    exit(1);
-}
-
-
 /*
  * uud: picks apart a single-part uuencoded message, ignoring headers
  *      and separators and everything.  This is backwards compatability
@@ -447,11 +457,11 @@ uud(FILE *input)
     char *p, *filename, *actualname;
     unsigned int perms = 0644;
 
-    while (xfgetline(input, line, sizeof line))
+    while (xfgetline(line, sizeof line, input))
 	if (strncasecmp(line, "begin ", 6) == 0) {
 	    perms = (unsigned int)strtol(line+6, &p, 8);
 
-	    if (p == line+6) baduueheader();
+	    if (p == line+6) error("badly formed uuencode ``begin'' line");
 
 	    perms &= 0777;	/* mask off unwanted mode bits */
 
@@ -460,13 +470,16 @@ uud(FILE *input)
 		filename = ++p;
 		if (p = strchr(p, '"'))
 		    *p = 0;
-		else baduueheader();
+		else  error("badly formed uuencode ``begin'' line");
 	    }
 	    else filename = p;
 
-	    if (*filename == 0) baduueheader();
+	    if (*filename == 0) error("badly formed uuencode ``begin'' line");
+
+	    if (outputfile) filename = outputfile;
 
 	    actualname = alloca(strlen(filename)+20);
+	    actualname[0] = 0;
 
 	    io.input = input;
 	    io.output = openfile(filename, actualname);
@@ -524,11 +537,11 @@ read_mime(FILE* input)
 		    filename = fixfilename(getstring(p));
 	    }
 
-	if ((filename == 0) && writeoutput)  {
+	if ((filename == 0) && savethemall)  {
 	    char template[20];
 	    strcpy(template, "part.XXXXXX");
 	    if ( (filename = mktemp(template)) == 0)
-		fprintf(stderr, "can't create output file: %s\n", strerror(errno));
+		error("can't create output file: %s", strerror(errno));
 	}
 
 	if (verbose) {
@@ -592,23 +605,48 @@ read_mime(FILE* input)
 } /* read_mime */
 
 
-struct x_option options[] = {
+struct x_option ropts[] = {
     { '7', '7', "7bit",    0, "Force filenames to 7 bit ascii" },
-    { 'w', 'w', "write",   0, "Always write document fragments to files" },
+    { 'a', 'a', "all",     0, "Write all document fragments to files" },
     { 'h', 'h', "help",    0, "Show this message" },
     { 'v', 'v', "verbose", 0, "Display progress messages" },
     { 'V', 'V', "version", 0, "Show the version number, then exit" }
 };
-#define NROPTIONS (sizeof options/sizeof options[0])
+
+struct x_option uopts[] = {
+    { '7', '7', "7bit",    0, "Force filenames to 7 bit ascii" },
+    { 'o', 'o', "output", "FILE", "Write output to FILE" },
+    { 'v', 'v', "verbose", 0, "Display progress messages" },
+};
+#define SIZE(opt) (sizeof opt/sizeof opt[0])
 
 
 main(int argc, char **argv)
 {
-    int opt;
+    int opt, uudecode = 0;
+    struct x_option *opts;
+    int nropts;
 
     x_opterr = 1;
 
-    while ((opt = x_getopt(argc, argv, NROPTIONS, options)) != EOF) {
+    if ( (pgm = strrchr(argv[0], '/')) == 0)
+	pgm = argv[0];
+    else
+	pgm++;
+
+    if (strcasecmp(pgm, "uudecode") == 0)
+	uudecode = 1;
+
+    if (uudecode) {
+	opts = uopts;
+	nropts = SIZE(uopts);
+    }
+    else {
+	opts = ropts;
+	nropts = SIZE(ropts);
+    }
+
+    while ((opt = x_getopt(argc, argv, nropts, opts)) != EOF) {
 	switch (opt) {
 	case '7':
 		sevenbit++;
@@ -616,27 +654,28 @@ main(int argc, char **argv)
 	case 'v':
 		verbose++;
 		break;
-	case 'w':
-		writeoutput++;
+	case 'u':
+		uudecode++;
+		break;
+	case 'a':
+		savethemall++;
+		break;
+	case 'o':
+		outputfile = x_optarg;
 		break;
 	case 'V':
-		puts("unravel " VERSION);
+		printf("%s %s\n", pgm, VERSION);
 		exit(0);
 	default:
-		fprintf(stderr, "\nusage: unravel [options] [file]\n\n");
-		showopts(stderr, NROPTIONS, options);
+		fprintf(stderr, "\nusage: %s [options] [file]\n\n", pgm);
+		showopts(stderr, nropts, opts);
 		exit (opt == 'h' ? 0 : 1);
 	}
     }
 
-    if ( (pgm = strrchr(argv[0], '/')) == 0)
-	pgm = argv[0];
-    else
-	pgm++;
-
     if (argc <= x_optind) {
 	if (isatty(0)) {
-	    fprintf(stderr, "unravel: cannot read input from a tty\n");
+	    error("cannot read input from a tty\n");
 	    exit(1);
 	}
 	setlinebuf(stdin);
@@ -645,7 +684,7 @@ main(int argc, char **argv)
 	perror(argv[x_optind]);
 	exit(1);
     }
-    if (strcasecmp(pgm, "uudecode") == 0)
+    if (uudecode)
 	uud(stdin);
     else {
 	stack = malloc(1);
