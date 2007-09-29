@@ -34,11 +34,13 @@
 #
 ac_default_path="/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin:/usr/X11R6/bin"
 
+test -d /usr/share/man && __sharedir=/share
+
 ac_standard="--src=DIR		where the source lives (.)
 --prefix=DIR		where to install the final product (/usr/local)
---execdir=DIR		where to put executables (prefix/bin)
---libdir=DIR		where to put libraries (prefix/lib)
---mandir=DIR		where to put manpages (prefix/man)
+--execdir=DIR		where to put executables (\$prefix/bin)
+--libdir=DIR		where to put libraries (\$prefix/lib)
+--mandir=DIR		where to put manpages (\$prefix$__sharedir/man)
 --confdir=DIR		where to put configuration information (/etc)"
 
 __fail=exit
@@ -545,8 +547,8 @@ EOF
     AC_PREFIX=${AC_PREFIX:-/usr/local}
     AC_EXECDIR=${AC_EXECDIR:-$AC_PREFIX/bin}
     AC_LIBDIR=${AC_LIBDIR:-$AC_PREFIX/lib}
-    AC_MANDIR=${AC_MANDIR:-$AC_PREFIX/man}
     AC_CONFDIR=${AC_CONFDIR:-/etc}
+    AC_MANDIR=${AC_MANDIR:-$AC_PREFIX$__sharedir/man}
 
     AC_PATH=${WITH_PATH:-$PATH}
     AC_PROG_CPP
