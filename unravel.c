@@ -14,7 +14,7 @@
 #include <string.h>
 #include <basis/options.h>
 
-FILE* openfile(char*, char*);
+FILE* openfile(char*, char*, char*);
 
 #include "mime_encoding.h"
 
@@ -52,10 +52,11 @@ static int nrbound = 0;
 static int sp = 0;
 
 static int verbose = 0;		/* spit out needed debugging */
-static int savethemall = 0;	/* write all valid fragments */
+static int save_them_all = 0;	/* write all valid fragments */
 static int sevenbit = 0;	/* force filenames to usascii */
 
 static char *outputfile = 0;	/* fixed output file for uudecode */
+static char *prefix = "part";	/* name for -a files */
 
 char *pgm;
 
@@ -86,7 +87,6 @@ xfgetline(char *bfr, int len, FILE *fd)
     char *ret;
     int size;
 
-    /*savepoint = ftell(fd);*/
     if (ret = fgets(bfr, len, fd)) {
 	size = strlen(bfr);
 	if (size > 0 && bfr[size-1] == '\n') {
@@ -240,7 +240,6 @@ read_headers(FILE* input, struct interesting_headers* info)
     }
     if (gotheaders)
 	info->headers_are_valid = 1;
-    /*fseek(input, savepoint, SEEK_SET);*/
     return 1;
 } /* read_headers */
 
@@ -342,13 +341,13 @@ writechar(struct about *io, char ch)
 static void
 namefile(struct about *io, char *wanted, char *actual)
 {
-    if (wanted) {
+    if (wanted)
 	fprintf(stderr, "%s ", wanted);
-	if (io->output && (wanted == 0 || strcmp(wanted, actual) != 0)) {
-	    if (wanted)
-		fprintf(stderr, "-> ");
-	    fprintf(stderr,"%s ", actual);
-	}
+
+    if (io->output && actual && (wanted == 0 || strcmp(wanted, actual) != 0) ) {
+	if (wanted)
+	    fprintf(stderr, "-> ");
+	fprintf(stderr,"%s ", actual);
     }
 }
 
@@ -362,12 +361,10 @@ read_section(FILE* input, Encoder *translator, char* filename)
     struct about io;
     char *actualname = 0;
 
-    if (filename) {
-	actualname = alloca(strlen(filename) + 20);
-	actualname[0] = 0;
-    }
+    actualname = alloca((filename ? strlen(filename) : strlen(prefix)) + 40);
+    actualname[0] = 0;
 
-    io.output = filename ? openfile(filename, actualname) : 0;
+    io.output = openfile(filename, prefix, actualname);
     io.input = input;
     io.linecount = 0;
 
@@ -482,7 +479,7 @@ uud(FILE *input)
 	    actualname[0] = 0;
 
 	    io.input = input;
-	    io.output = openfile(filename, actualname);
+	    io.output = openfile(filename, prefix, actualname);
 	    io.linecount = 0;
 
 	    namefile(&io, filename, actualname);
@@ -515,7 +512,7 @@ read_mime(FILE* input)
 
     ofn = get_translator(headers.content_transfer_encoding);
 
-    if ((sp || headers.mime_version) && headers.content_type) {
+    if ( (save_them_all || sp || headers.mime_version) && headers.content_type) {
 
 	for (p = fragment(headers.content_type); p; p = fragment(0)) {
 	    p = skipwhite(p);
@@ -537,18 +534,12 @@ read_mime(FILE* input)
 		    filename = fixfilename(getstring(p));
 	    }
 
-	if ((filename == 0) && savethemall)  {
-	    char template[20];
-	    strcpy(template, "part.XXXXXX");
-	    if ( (filename = mktemp(template)) == 0)
-		error("can't create output file: %s", strerror(errno));
-	}
-
 	if (verbose) {
 	    fprintf(stderr, "filename is     [%s]\n"
 			    "boundary is     [%s]\n"
 			    "content_type is [%s]\n",
-			    filename, boundary ? boundary : "-undefined-",
+			    filename ? filename : "-undefined-",
+			    boundary ? boundary : "-undefined-",
 			    headers.content_type);
 	}
 
@@ -571,6 +562,7 @@ read_mime(FILE* input)
 	     * boundary will have already been popped off the boundary
 	     * stack by checkbound()
 	     */
+
 
 	    if (boundary) {
 		int level;
@@ -601,7 +593,7 @@ read_mime(FILE* input)
 	return;
     }
 
-    return read_section(input, ofn, filename);
+    return (filename||save_them_all) ? read_section(input, ofn, filename) : eat_section(input);
 } /* read_mime */
 
 
@@ -609,6 +601,7 @@ struct x_option ropts[] = {
     { '7', '7', "7bit",    0, "Force filenames to 7 bit ascii" },
     { 'a', 'a', "all",     0, "Write all document fragments to files" },
     { 'h', 'h', "help",    0, "Show this message" },
+    { 'p', 'p', "prefix"  "PFX", "set doument prefix to PFX" },
     { 'v', 'v', "verbose", 0, "Display progress messages" },
     { 'V', 'V', "version", 0, "Show the version number, then exit" }
 };
@@ -658,10 +651,13 @@ main(int argc, char **argv)
 		uudecode++;
 		break;
 	case 'a':
-		savethemall++;
+		save_them_all++;
 		break;
 	case 'o':
 		outputfile = x_optarg;
+		break;
+	case 'p':
+		prefix = x_optarg;
 		break;
 	case 'V':
 		printf("%s %s\n", pgm, VERSION);

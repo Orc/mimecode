@@ -76,43 +76,31 @@ encode( mimeread read, mimewrite write, void *context )
 static int
 decode( mimeread read, mimewrite write, void *context)
 {
-    register i, size;
-    unsigned int val;
-    char c;
     char line[512];
-    register queued = 0, pad = 0;
-    long ebfr;
+    register char *code;
+    register size, i;
+    unsigned char c[4];
 
     while ( (size = (*read)(context, line, sizeof line)) > 0 ) {
-	for (i=0; i < size; i++) {
-	    c = 0x7f & line[i];
+	code = line;
 
-	    if (c == '=') {
-		ebfr <<= 6;
-		queued++;
-		pad++;
-	    }
-	    else if ( (val = X64dec[c]) >= 0) {
-		ebfr <<= 6;
-		ebfr |=  (63 & val);
-		queued++;
+	while ( (size > 0) && (code[0] != '=') ) {
+	    c[0] = X64dec[code[0]];
+	    c[1] = X64dec[code[1]];
+	    c[2] = X64dec[code[2]];
+	    c[3] = X64dec[code[3]];
 
-		if (queued == 4) {
-		    switch (pad) {
-		    default: Write(context, ebfr>>16);
-		    case 1:  Write(context, ebfr>> 8);
-		    case 2:  Write(context, ebfr    );
-		    }
-		    ebfr = queued = pad = 0;
-		}
-	    }
-	}
-    }
-    if (queued == 4) {
-	switch (pad) {
-	default: Write(context, ebfr>>16);
-	case 1:  Write(context, ebfr>> 8);
-	case 2:  Write(context, ebfr    );
+	    Write(context, (c[0]<<2) | (c[1]>>4) );
+	    if (code[2] == '=')
+		break;
+	    Write(context, (c[1]<<4) | (c[2]>>2) );
+	    if (code[3] == '=')
+		break;
+
+	    Write(context, (c[2]<<6) | (c[3]) );
+
+	    code += 4;
+	    size -= 4;
 	}
     }
     return 0;

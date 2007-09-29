@@ -12,7 +12,7 @@ unravel \- pick apart MIME documents
 .I files
 .PP
 .B unravel
-[ -7hvwV ]
+[ -7hvaV ]
 [ file ]
 .SH DESCRIPTION
 .I Ravel
@@ -48,12 +48,12 @@ take a few options.
 takes the following options:
 .IP -7
 Write output filenames in 7 bit USASCII.
+.IP -a
+Write every parts of the mimed file to disk, even if it doesn't have a
+filename specified.
 .IP -h
 Print a help message describing what command-line options are available,
 then exit.
-.IP -w
-Write every section of the mimed file to disk, even if it doesn't have a
-filename specified.
 .IP -v
 Print debugging and progress messages.
 .IP -V
