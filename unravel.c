@@ -515,8 +515,10 @@ read_mime(FILE* input)
 	     */
 
 	    if (boundary) {
+		int level;
+
 		pushboundary(boundary);
-		int level = sp;
+		level = sp;
 
 		eat_section(input);
 		while (sp == level)
