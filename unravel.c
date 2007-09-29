@@ -601,7 +601,7 @@ struct x_option ropts[] = {
     { '7', '7', "7bit",    0, "Force filenames to 7 bit ascii" },
     { 'a', 'a', "all",     0, "Write all document fragments to files" },
     { 'h', 'h', "help",    0, "Show this message" },
-    { 'p', 'p', "prefix"  "PFX", "set doument prefix to PFX" },
+    { 'p', 'p', "prefix",  "PFX", "set document prefix to PFX" },
     { 'v', 'v', "verbose", 0, "Display progress messages" },
     { 'V', 'V', "version", 0, "Show the version number, then exit" }
 };
