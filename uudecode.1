@@ -21,6 +21,9 @@
 '.\" ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 '.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
 '.\" ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+'.\" Copyright (c) 2007 David Parsons <orc@pell.chi.il.us>
+'.\" All rights reserved.
+'.\"
 '.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
 '.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
 '.\" OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
@@ -31,34 +34,56 @@
 '.\"
 '.\"     @(#)uuencode.1	6.9 (Berkeley) 4/23/91
 '.\"
-.TH uudecode 1
-.SH NAME
-uudecode \- decode a file created by uuencode
-.SH SYNOPSIS
-.B uudecode
-[ file ]...
-.SH DESCRIPTION
-.I Uudecode
-transforms
+.Dd September 29, 2007
+.Os Mastodon
+.Dt UUDECODE 1
+.Sh NAME
+.Nm uudecode
+.Nd decode a uuencoded file
+.Sh SYNOPSIS
+.Nm
+.Op Fl 7V
+.Op Fl o Ar file
+.Op Ar file
+.Sh DESCRIPTION
+.Nm
+decodes the
 uuencoded
-.I file
+.Ar file
 (or by default, the standard input) into the original form,
 attempting to retain the mode (except for setuid bits) of
 the original file.
 If a file of the same name exists, the file will have a sequence
 number appended to it to avoid conflicts.
-.I Uudecode
+.Nm
 ignores any leading and trailing lines.
-.SH SEE ALSO
-ravel(1), unravel(1)
-.SH HISTORY
+.Ss Options
+.Bl -tag -width o-file-me -compact -offset indent
+.It Fl 7
+Force filenames to 7-bit USASCII.
+.It Fl o Ar file
+Write the decoded file to
+.Ar file ,
+instead of to the filename specified on the
+.Ar begin
+line.
+.It Fl V
+Write the version#, then exit.
+.El
+.Sh HISTORY
 The
-.I uudecode
+.Nm
 command appeared in
 BSD 4.0.
-.PP
+.Pp
 This implementation of
-.I uudecode
+.Nm
 is implemented within the
-.I unravel(1)
+.Xr unravel 1
 program.
+.Sh SEE ALSO
+.Xr ravel 1 ,
+.Xr unravel 1 ,
+.Xr uuencode 5
+.Sh AUTHOR
+David Parsons <orc@pell.chi.il.us>

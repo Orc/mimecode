@@ -10,7 +10,7 @@ CXXFLAGS=$(CFLAGS)
 BINDIR=@exedir@
 MANDIR=@mandir@
 
-MANPAGES=ravel.1 unravel.1 uudecode.1
+MANPAGES=ravel.1 unravel.1 uudecode.1 uuencode.5
 PROGS= ravel unravel
 
 OBJS=version.o qp.o base64.o uudecode.o clear.o openfile.o

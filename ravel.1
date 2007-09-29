@@ -1,95 +1,115 @@
 '.\"
 '.\"    %A%
 '.\"
-.TH RAVEL 1 "%E%" "Mastodon Linux"
-.SH NAME
-ravel \- build MIME documents
+.Dd September 29, 2007
+.Os Mastodon
+.Dt (UN)RAVEL 1
+.Sh NAME
+.Nm ravel
+.Nd construct mime-encoded documents
 .br
-unravel \- pick apart MIME documents
-.SH SYNOPSIS
-.B ravel
-[ -hV ] [ -s subj] [ -m msgid ] [-b text] [-p text] [-o file] [-t recipient]
-.I files
-.PP
-.B unravel
-[ -7hvaV ]
-[ file ]
-.SH DESCRIPTION
-.I Ravel
+.Nm unravel
+.Nd extract files from mime-encoded documents
+.Sh SYNOPSIS
+.Nm ravel
+.Op Fl fV
+.Op Fl s Ar subj
+.Op Fl m Ar msgid
+.Op Fl b Ar text
+.Op Fl p Ar text
+.Op Fl o Ar file
+.Op Fl t Ar recipient
+.Ar file(s)
+.Nm unravel
+.Op Fl 7hvaV
+.Op Fl p Ar prefix
+.Op Ar file
+.Sh DESCRIPTION
+.Nm Ravel
 and
-.I unravel
+.Nm unravel
 are used to create and extract MIME-encoded mail documents, for
 transmitting over networks that
 do not support other than simple
 ASCII
 data.
-.PP
-.I Ravel
+.Pp
+.Nm Ravel
 reads
-.I files
+.Nm files
 and writes an mime-encoded version
-to the standard output.
+to the standard output (or mails it if recipients are given
+via the
+.Fl t
+option.)
 For ascii files,
-.I ravel
+.Nm ravel
 uses the
-.B quoted-printable
+.Ar quoted-printable
 encoding, and for binary files the base64 encoding.
-.PP
-.I Unravel
+.Pp
+.Nm Unravel
 breaks apart
-.I files
+.Ar files
 (or by default, the standard input) into their original form.
-.SH OPTIONS
-.I Ravel
-and
-.I unravel
-take a few options.
-.I Unravel
-takes the following options:
-.IP -7
-Write output filenames in 7 bit USASCII.
-.IP -a
-Write every parts of the mimed file to disk, even if it doesn't have a
-filename specified.
-.IP -h
-Print a help message describing what command-line options are available,
-then exit.
-.IP -v
-Print debugging and progress messages.
-.IP -V
-Print what version this is, then exit.
-
-.PP
-.I ravel
-takes the following options:
-.IP -h
+Additionally, 
+.Nm unravel
+is able to decode 
+.Xr uuencode 5 Ns ed
+documents.
+.Ss Ravel Options
+.Bl -tag -width p-prefix-me -compact -offset indent
+.It Fl h
 Print a help message, then exit.
-.IP -V
+.It Fl V
 Print what version this is, then exit.
-.IP "-s \fIsubject\fR"
+.It Fl s Ar subject
 Use the given
-.B subject
+.Ar subject
 on the Subject: line of the mime-encoded document (the default is
-.B "Mime-encoded files"\fR)
-.IP "-m \fImessage-id\fR"
+.Ar "Mime-encoded files"\fR)
+.It Fl m Ar message-id
 Use the given
-.B message-id
+.Ar message-id
 for the mime-encoded document, instead of a machine-generated one.
-.IP "-b \fIboundary-string\fR"
-Use the given boundary string to separate the elements in the
+.It Fl b Ar boundary-string
+Use the given
+.Ar boundary
+.Ar string
+to separate the elements in the
 encoded message.
-.IP "-p \fItext\fR"
+.It Fl p Ar text
 MIME documents traditionally come with a little header saying that
 this is a mime document and you may not be able to read it unless
 you've got a mime-capable document reader.  You may replace this
 message with any (single line) message that you choose.
-.IP "-o \fIfile\fR"
-Write the completed MIME document to
-.I file
-instead of to standard out.
-.IP "-t recipient"
-Attempt to mail this MIME document to the given recipient.
-.SH AUTHOR
-David Parsons (orc@pell.chi.il.us), for
-.B Mastodon
-Linux.
+.It Fl t Ar recipient
+Attempt to mail this MIME document to the given recipient. (This
+option may be specified multiple times.)
+.El
+.Ss Unravel Options
+.Bl -tag -width p-prefix-me -compact -offset indent
+.It Fl 7
+Write output filenames in 7 bit USASCII.
+.It Fl a
+Write every parts of the mimed file to disk, even if it doesn't have a
+filename specified.   If the
+.Fl p
+option was not specified, these parts will be written to the file(s)
+.Ar part. Ns seq .
+.It Fl h
+Print a help message describing what command-line options are available,
+then exit.
+.It Fl v
+Print debugging and progress messages.
+.It Fl V
+Print what version this is, then exit.
+.It Fl p Ar prefix
+Write unnamed mime-fragments to
+.Ar prefix Ns .seq
+.El
+.Sh SEE ALSO
+.Xr uuencode 5 ,
+.Xr uudecode 1
+.Sh AUTHOR
+David Parsons (orc@pell.chi.il.us)
