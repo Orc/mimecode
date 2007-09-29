@@ -484,8 +484,9 @@ uud(FILE *input)
 
 	    namefile(&io, filename, actualname);
 
-	    (uuencode.decode)(readline,writechar,&io);
-    
+	    if ( (uuencode.decode)(readline,writechar,&io) != -1 )
+		io.linecount--;
+
 	    if (isatty(1))
 		fprintf(stderr, "[%d line%s]\n",
 				io.linecount,
@@ -512,8 +513,7 @@ read_mime(FILE* input)
 
     ofn = get_translator(headers.content_transfer_encoding);
 
-    if ( (save_them_all || sp || headers.mime_version) && headers.content_type) {
-
+    if ((save_them_all || sp || headers.mime_version) && headers.content_type) {
 	for (p = fragment(headers.content_type); p; p = fragment(0)) {
 	    p = skipwhite(p);
 	    /* possible bug:  getstring() returns a string from a static array,
@@ -587,7 +587,7 @@ read_mime(FILE* input)
 	 *	text/	-- possibly uuencoded.
 	 */
     }
-    if (ofn == &clear && sp == 1 && filename == 0) {
+    if (ofn == &clear && sp == 0 && filename == 0) {
 	/* Not mime.  Maybe it's uuencoded? */
 	uud(input);
 	return;

@@ -68,10 +68,11 @@ uudecode(mimeread read, mimewrite write, void *ctx)
     register char ch, *p;
     char text[512];
     int size;
+    int count = 0;
 
     while ( (size = (*read)(ctx, text, sizeof text)) > 0 ) {
 
-	if (strncasecmp(text, "end", 3) == 0)
+	if (strcasecmp(text, "end\n") == 0 || strcasecmp(text, "end\r\n") == 0)
 	    break;
 
 	/*
@@ -105,7 +106,7 @@ uudecode(mimeread read, mimewrite write, void *ctx)
 	    }
 	}
     }
-    return 0;
+    return 1;
 } /* uudecode */
 
 struct mime_encoding uuencode = { "text/uuencode", 0, uudecode };
