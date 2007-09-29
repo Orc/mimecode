@@ -31,11 +31,10 @@
  * SUCH DAMAGE.
  */
 
-static const char copyright[] = "@(#) Copyright (c) 1983, 1993\n
-The Regents of the University of California.All rights reserved. \n";
+static const char copyright[] = "@(#) Copyright (c) 1983, 1993\n"
+"The Regents of the University of California.All rights reserved. \n";
 
 static const char sccsid[] = "@(#)uudecode.c	8.2 (Berkeley) 4/2/94";
-static const char rcsid[] = "$Id$";
 
 /*
  * mime-encoding for `content-transfer-encoding: X-uue' files.
@@ -47,28 +46,13 @@ static const char rcsid[] = "$Id$";
 #include <errno.h>
 #include <ctype.h>
 #include <string.h>
-#ifdef OS_FREEBSD
-#   include <stdlib.h>
-#else
-#   include <malloc.h>
-#endif
+#include <stdlib.h>
 
 #include "mime_encoding.h"
 
-struct mime_encoding uuencode;
 
+#define Write(ctx,ch)	if ( (*write)(ctx,ch) == -1) return -1
 
-#define U_MAGIC	0x0DDBA11
-
-struct urec {
-    long magic;
-    struct mime_encoding* functions;
-    enum {NEEDBEGIN, DECODING, FINISHED} state;
-    FILE* stream;
-    int privateopen;
-    int filemode;		/* for privateopen */
-    char *filename;		/* for privateopen */
-} ;
 
 /*
  * uudecode() handles a line from a uuencoded file.  It only decodes one thing per
@@ -76,170 +60,66 @@ struct urec {
  * we need to have a way to pass this information up to the calling process.
  */
 static int
-uudecode(unsigned char* line, struct urec* fd)
+uudecode(mimeread read, mimewrite write, void *ctx)
 {
 #define	DEC(c)	(((c) - ' ') & 077)	/* single character decode */
 
     register int n;
     register char ch, *p;
+    char text[512];
+    int size;
 
-    switch (fd->state) {
-    case NEEDBEGIN:
-	    if (strncmp(line, "begin ", 6) == 0) {
-		int mode = 0644;
-		
+    enum {NEEDBEGIN, DECODING, FINISHED} state  = NEEDBEGIN;
 
-		/* if a stream wasn't specified in the open, we need
-		 * to initialize it when we encounter the begin line.
-		 */
-		if (fd->privateopen) {
-		    if (sscanf(line, "begin %o", &mode) < 1) {
-			errno = EINVAL;
-			return EOF;
-		    }
-		    p = line+6/*sizeof "begin "*/;
-		    while (*p && !isspace(*p))
-			++p;
-		    while (*p && isspace(*p))
-			++p;
+    while ( (size = (*read)(ctx, text, sizeof text)) > 0 ) {
+	switch (state) {
+	case NEEDBEGIN:
+	    if (strncmp(text, "begin ", 6) == 0)
+		state = DECODING;
+	    break;
+	case DECODING:
+	    /* trim \r\n off the end of the string */
+	    for (p=text; *p != '\r' && *p != '\n' && *p; ++p)
+		;
+	    *p = 0;
 
-		    strtok(p, "\r\n");
-		    fd->filename = malloc(strlen(p) + 20);
-		    if (strlen(p) == 0 || (fd->stream = openfile(p, fd->filename)) == 0)
-			return EOF;
-		}
-		fd->state = DECODING;
-		fd->filemode = mode;
+	    if (strcmp(text, "end") == 0) {
+		state = FINISHED;
+		break;
 	    }
-	    break;
-    case DECODING:
-	/* trim \r\n off the end of the string */
-	for (p=line; *p != '\r' && *p != '\n' && *p; ++p)
-	    ;
-	*p = 0;
-
-	if (strcmp(line, "end") == 0) {
-	    fd->state = FINISHED;
-	    break;
-	}
-	/*
-	 * `n' is used to avoid writing out all the characters
-	 * at the end of the file.
-	 */
-	if ((n = DEC(*line)) <= 0)
-	    break;
-	for (++line; n > 0; line += 4, n -= 3)
-	    if (n >= 3) {
-		ch = DEC(line[0]) << 2 | DEC(line[1]) >> 4;
-		fputc(ch, fd->stream);
-		ch = DEC(line[1]) << 4 | DEC(line[2]) >> 2;
-		fputc(ch, fd->stream);
-		ch = DEC(line[2]) << 6 | DEC(line[3]);
-		fputc(ch, fd->stream);
-	    }
-	    else {
-		if (n >= 1) {
-		    ch = DEC(line[0]) << 2 | DEC(line[1]) >> 4;
-		    fputc(ch, fd->stream);
-		}
-		if (n >= 2) {
-		    ch = DEC(line[1]) << 4 | DEC(line[2]) >> 2;
-		    fputc(ch, fd->stream);
-		}
+	    /*
+	     * `n' is used to avoid writing out all the characters
+	     * at the end of the file.
+	     */
+	    if ((n = DEC(*text)) <= 0)
+		break;
+	    for (p = text; n > 0; p += 4, n -= 3)
 		if (n >= 3) {
-		    ch = DEC(line[2]) << 6 | DEC(line[3]);
-		    fputc(ch, fd->stream);
+		    ch = DEC(p[0]) << 2 | DEC(p[1]) >> 4;
+		    Write(ctx,ch);
+		    ch = DEC(p[1]) << 4 | DEC(p[2]) >> 2;
+		    Write(ctx,ch);
+		    ch = DEC(p[2]) << 6 | DEC(p[3]);
+		    Write(ctx,ch);
 		}
-	    }
-	    break;
-    default:
-	    break;
+		else {
+		    if (n >= 1) {
+			ch = DEC(p[0]) << 2 | DEC(p[1]) >> 4;
+			Write(ctx,ch);
+		    }
+		    if (n >= 2) {
+			ch = DEC(p[1]) << 4 | DEC(p[2]) >> 2;
+			Write(ctx,ch);
+		    }
+		    if (n >= 3) {
+			ch = DEC(p[2]) << 6 | DEC(p[3]);
+			Write(ctx,ch);
+		    }
+		}
+		break;
+	}
     }
-    return 1;
+    return 0;
 } /* uudecode */
 
-
-/*
- * uopen() opens a uucoder stream
- */
-static struct urec*
-uopen(FILE* stream, mime_open_mode mode)
-{
-    struct urec* tmp;
-
-    if (mode != MIME_DECODE) {
-	errno = ENOSYS;
-	return 0;
-    }
-
-    if ((tmp = malloc(sizeof *tmp)) == 0)
-	return 0;
-
-    tmp->magic = U_MAGIC;
-    tmp->stream = stream;
-    tmp->state = NEEDBEGIN;
-    tmp->privateopen = stream ? 0 : 1;
-    tmp->filemode = 0644;	/* ignored if not privateopen */
-    tmp->filename = 0;
-
-    return tmp;
-} /* uopen */
-
-
-/*
- * uput() writes a string to the coder
- */
-static int
-uput(unsigned char* line, int linesize, struct urec* fd)
-{
-    return uudecode(line, fd);
-} /* uput */
-
-
-/*
- * uclose() shuts down the coder
- */
-static int
-uclose(struct urec* fd)
-{
-    if (fd) {
-	fflush(fd->stream);
-	if (fd->privateopen) {
-	    fchmod(fileno(fd->stream), fd->filemode);
-	    fclose(fd->stream);
-	    if (fd->filename)
-		free(fd->filename);
-	}
-	
-	fd->magic = ~1;
-	free(fd);
-	return 0;
-    }
-    else {
-	errno = EINVAL;
-	return EOF;
-    }
-} /* uclose */
-
-
-/*
- * ufilename() returns the file associated with this uuencoded object
- */
-static char *
-ufilename(struct urec* fd)
-{
-    return fd->filename;
-}
-
-
-/*
- * coder operations block-- the only thing that's exported from this
- * module
- */
-struct mime_encoding uuencode = {
-    "X-uue",		/* Content-Transfer-Encoding: */
-    uopen,		/* open the coder */
-    uput,		/* write a block to the coder */
-    uclose,		/* close the coder */
-    ufilename		/* print the name of the file we're spitting out */
-} ;
+struct mime_encoding uuencode = { "text/uuencode", 0, uudecode };

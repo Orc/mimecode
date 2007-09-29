@@ -40,82 +40,28 @@ static const char rcsid[] = "$Id$";
 #include "config.h"
 
 #include <errno.h>
-#ifdef OS_FREEBSD
-#   include <stdlib.h>
-#else
-#   include <malloc.h>
-#endif
-
+#include <stdlib.h>
 #include "mime_encoding.h"
 
-#define C_MAGIC 0x002C44C2
-
-struct crec {
-    long magic;
-    struct mime_encoding* functions;
-    mime_open_mode mode;
-    FILE *stream;
-};
-
-extern struct mime_encoding clear;
 
 /*
- * copen() returns a magic token saying we've opened this encoder.
- */
-static struct crec*
-copen(FILE* stream, mime_open_mode mode)
-{
-    struct crec* tmp;
-
-    if (mode != MIME_ENCODE && mode != MIME_DECODE) {
-	errno = EINVAL;
-	return 0;
-    }
-
-    if ((tmp = malloc(sizeof tmp[0])) == 0)
-	return 0;
-
-    tmp->magic = C_MAGIC;
-    tmp->stream = stream;
-    tmp->mode = mode;
-    tmp->functions = &clear;
-
-    return tmp;
-} /* copen */
-
-
-/*
- * cput() writes a string out to the output
+ * noop() is our cleartext "encode" and "decode"
  */
 static int
-cput(char* line, int size, struct crec* fd)
+noop(mimeread read, mimewrite write, void *context)
 {
-    if (fd == 0 || fd->magic != C_MAGIC) {
-	errno = EINVAL;
-	return;
-    }
-    fputs(line, fd->stream);
-    fputc('\n', fd->stream);
-}
+    char block[512];
+    int i, size;
 
-
-/*
- * cclose() closes up shop
- */
-static int
-cclose(struct crec* fd)
-{
-    fflush(fd->stream);
-    fd->magic = ~1;
-    free(fd);
+    while ( ( size = (*read)(context, block, sizeof block)) > 0 )
+	for (i=0; i < size; i++)
+	    if ( (*write)(context,block[i]) == -1 )
+		return -1;
     return 0;
 }
 
-
 struct mime_encoding clear = {
     "8bit",
-    copen,
-    cput,
-    cclose,
-    0
+    noop,
+    noop,
 };

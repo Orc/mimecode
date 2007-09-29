@@ -35,19 +35,13 @@
 /*
  * ravel: builds a mime file from a list of input files
  */
-static char sccsid[] = "%Z%%M% %I% %E%";
-
 #include "config.h"
 
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
 #include <unistd.h>
-#ifdef OS_FREEBSD
-#   include <stdlib.h>
-#else
-#   include <malloc.h>
-#endif
+#include <stdlib.h>
 #include "mime_encoding.h"
 #include <basis/options.h>
 
@@ -58,8 +52,6 @@ static char sccsid[] = "%Z%%M% %I% %E%";
 
 extern Encoder base64;
 extern Encoder quoted_printable;
-
-FILE *output = 0;
 
 struct x_option options[] = {
     { 's', 's', "subject", "SUBJECT", "Set the subject for this message" },
@@ -89,14 +81,30 @@ die(int code)
 }
 
 
+static int
+readblock(void *ctx, char *block, int size)
+{
+    context *io = ctx;
+    
+    return fread(block, 1, size, io->input);
+}
+
+static int
+writechar(void *ctx, char ch)
+{
+    context *io = ctx;
+    
+    return fputc(ch, io->output);
+}
+
+
 main(int argc, char **argv)
 {
     int ix;
     char block0[512];
     int j, sz;
     int istextIhope;
-    FILE *f;
-    MFILE coder;
+    context io;
     int opt;
     struct utsname sys;
     time_t now;
@@ -180,39 +188,39 @@ main(int argc, char **argv)
     }
 
     if (oflag) {
-	if ((output = fopen(oflag, "w")) == 0) {
+	if ((io.output = fopen(oflag, "w")) == 0) {
 	    perror(oflag);
 	    exit(1);
 	}
     }
     else if (nrto > 0) {
-	if ((output = popen(_PATH_SENDMAIL " -U -t", "w")) == 0) {
+	if ((io.output = popen(_PATH_SENDMAIL " -U -t", "w")) == 0) {
 	    perror("sendmail");
 	    exit(1);
 	}
 	tomail = 1;
     }
     else
-	output = stdout;
+	io.output = stdout;
 
-    fprintf(output,
+    fprintf(io.output,
 	    "Message-ID: <%s>\n"
 	   "Subject: %s\n"
            "Mime-Version: 1.0\n"
            "Content-Type: multipart/mixed; boundary=\"%s\"\n",
            messageid, subject, boundary);
     if (from && *from)
-	fprintf(output, "From: %s\n", from);
+	fprintf(io.output, "From: %s\n", from);
 
     if (to)
 	for (ix = 0; ix < nrto; ix++)
-	    fprintf(output, "To: %s\n", to[ix]);
-    fprintf(output, "\n");
+	    fprintf(io.output, "To: %s\n", to[ix]);
+    writechar(&io,'\n');
 
     if (preamble)
-	fprintf(output, "%s\n", preamble);
+	fprintf(io.output, "%s\n", preamble);
     else
-	fprintf(output,
+	fprintf(io.output,
 	       "This is a MIME-encoded message.  Decode it with `unravel' or\n"
 	       "any other MIME-unpacking software.  Unravel is available at\n"
 	       "http://www.pell.chi.il.us/~orc/Code/mimecode\n");
@@ -220,53 +228,48 @@ main(int argc, char **argv)
     for (ix = x_optind; ix < argc; ix++) {
 	if (verbose)
 	    fprintf(stderr, "packaging %s\n", argv[ix]);
-	if ((f = fopen(argv[ix], "r")) != 0) {
-	    fprintf(output,
+	if ((io.input = fopen(argv[ix], "r")) != 0) {
+	    fprintf(io.output,
 		    "--%s\n"
 	           "Content-Disposition: inline; filename=\"%s\"\n",
 			boundary, argv[ix]);
 
-	    sz = fread(block0, 1, sizeof block0, f);
+	    sz = fread(block0, 1, sizeof block0, io.input);
 	    for (istextIhope=1,j=0; j < sz; j++)
 		if (!isprint(block0[j]) && block0[j] != '\n'
 					&& block0[j] != '\t') {
 		    istextIhope=0;
 		    break;
 		}
+	    rewind(io.input);
+	    
 	    if (istextIhope) {
 		if (verbose)
 		    fprintf(stderr, "\t\tquoted-printable\n");
-		fprintf(output,
+		fprintf(io.output,
 			"Content-type: text/plain; name=\"%s\"\n"
 			"Content-transfer-encoding: quoted-printable\n\n",
 			argv[ix]);
-		coder = (*quoted_printable.open) (output, MIME_ENCODE);
-		rewind(f);
-		while (fgets(block0, sizeof block0, f))
-		    (*quoted_printable.put) (block0, sizeof block0, coder);
-		(*quoted_printable.close) (coder);
+		(*quoted_printable.encode)(readblock,writechar,&io);
 	    }
 	    else {
 		if (verbose)
 		    fprintf(stderr, "\t\tbase64\n");
-		fprintf(output,
+		fprintf(io.output,
 			"Content-type: application/octet-stream; name=\"%s\"\n"
 		        "Content-transfer-encoding: base64\n\n", argv[ix]);
-		coder = (*base64.open) (output, MIME_ENCODE);
-		do {
-		    (*base64.put)(block0, sz, coder);
-		} while ((sz = fread(block0, 1, sizeof block0, f)) > 0);
-		(*base64.close)(coder);
+		(*base64.encode)(readblock,writechar,&io);
 	    }
+	    fclose(io.input);
 	}
 	else
 	    perror(argv[ix]);
     }
-    fprintf(output, "--%s--\n", boundary);
-    fflush(output);
+    fprintf(io.output, "--%s--\n", boundary);
+    fflush(io.output);
     if (tomail) {
 	sleep(1);
-	pclose(output);
+	pclose(io.output);
     }
     exit(0);
 }

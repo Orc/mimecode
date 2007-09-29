@@ -15,7 +15,7 @@ PROGS= ravel unravel
 
 all: $(PROGS)
 
-ravel: ravel.o qp.o base64.o clear.o openfile.o @OPTIONS@
+ravel: ravel.o qp.o base64.o @OPTIONS@
 	$(CC) $(CFLAGS) -o ravel ravel.o qp.o base64.o @LIBS@ @OPTIONS@
 
 unravel: unravel.o qp.o base64.o clear.o openfile.o uudecode.o @OPTIONS@
@@ -23,7 +23,7 @@ unravel: unravel.o qp.o base64.o clear.o openfile.o uudecode.o @OPTIONS@
 				   uudecode.o openfile.o @LIBS@ @OPTIONS@
 
 clean:
-	rm -f unravel *.o
+	rm -f ravel unravel *.o
 
 distclean spotless: clean
 	rm -f @CONFIGURE_FILES@ @GENERATED_FILES@

@@ -1,42 +1,6 @@
 /*
- *   Copyright (c) 1998 David Parsons. All rights reserved.
- *   
- *   Redistribution and use in source and binary forms, with or without
- *   modification, are permitted provided that the following conditions
- *   are met:
- *  1. Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *  2. Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *  3. All advertising materials mentioning features or use of this
- *     software must display the following acknowledgement:
- *     
- *   This product includes software developed by David Parsons
- *   (orc@pell.chi.il.us)
- *
- *  4. My name may not be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *     
- *  THIS SOFTWARE IS PROVIDED BY DAVID PARSONS ``AS IS'' AND ANY
- *  EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- *  THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
- *  PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL DAVID
- *  PARSONS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- *  EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
- *  TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- *  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- *  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
- *  IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
- *  THE POSSIBILITY OF SUCH DAMAGE.
- */
-/*
  * unravel: picks apart a mimed article.
  */
-static char sccsid[] = "%Z%%M% %I% %E%";
-
 #include "config.h"
 
 #include <stdio.h>
@@ -44,11 +8,7 @@ static char sccsid[] = "%Z%%M% %I% %E%";
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
-#ifdef OS_FREEBSD
-#   include <stdlib.h>
-#else
-#   include <malloc.h>
-#endif
+#include <stdlib.h>
 
 #include <string.h>
 #include <basis/options.h>
@@ -81,21 +41,20 @@ struct interesting_headers {
 
 
 struct boundary_stack {
-    char *boundary;
+    char *mark;
     int size;
-    int level;
 } ;
 
 static struct boundary_stack *stack;
 
 static int nrbound = 0;
-static int topbound = 0;
-
-static char line[10240];
+static int sp = 0;
 
 static int verbose = 0;		/* spit out needed debugging */
 static int writeoutput = 0;	/* write all valid fragments */
 static int sevenbit = 0;	/* force filenames to usascii */
+
+long savepoint = 0;
 
 #define Match(s,cst_p)	(strncasecmp(s, cst_p, sizeof(cst_p)-1) == 0)
 #define Cstrdup(s, cst_p) (Match(s, cst_p) ? strdup(skipwhite(s+sizeof(cst_p)-1)) : 0)
@@ -106,10 +65,11 @@ static int sevenbit = 0;	/* force filenames to usascii */
 char *
 xfgetline(char *bfr, int len, FILE *fd)
 {
-    char *ret = fgets(bfr, len, fd);
+    char *ret;
     int size;
 
-    if (ret) {
+    savepoint = ftell(fd);
+    if (ret = fgets(bfr, len, fd)) {
 	size = strlen(bfr);
 	if (size > 0 && bfr[size-1] == '\n') {
 	    --size;
@@ -126,16 +86,15 @@ xfgetline(char *bfr, int len, FILE *fd)
  * pushboundary() pushes a boundary onto the boundary stack
  */
 static void
-pushboundary(char* boundary, int level)
+pushboundary(char* boundary)
 {
-    if (topbound == nrbound) {
+    sp++;
+    if (sp == nrbound) {
 	nrbound = (nrbound+1) * 2;
 	stack = realloc(stack, nrbound * sizeof stack[0]);
     }
-    stack[topbound].boundary = strdup(boundary);
-    stack[topbound].size  = strlen(boundary);
-    stack[topbound].level = level;
-    topbound++;
+    stack[sp].mark = strdup(boundary);
+    stack[sp].size  = strlen(boundary);
 } /* pushboundary */
 
 
@@ -145,9 +104,9 @@ pushboundary(char* boundary, int level)
 static void
 popboundary()
 {
-    if (topbound > 0) {
-	--topbound;
-	free(stack[topbound].boundary);
+    if (sp) {
+	free(stack[sp].mark);
+	--sp;
     }
 } /* popboundary */
 
@@ -156,24 +115,23 @@ popboundary()
  * checkbound() checks to see if a line can be found in the boundary stack
  */
 static int
-checkbound(char* candidate)
+checkbound(char* line)
 {
-    int sz;
+    if (sp <= 0 || line[0] != '-' || line[1] != '-')
+	return 0;
 
-    if (topbound <= 0 || candidate[0] != '-' || candidate[1] != '-')
-	return EOF;
-
-    sz = stack[topbound-1].size;
-
-    if (strncmp(candidate+2, stack[topbound-1].boundary, sz) == 0) {
+    if (strncmp(line+2, stack[sp].mark, stack[sp].size) == 0) {
+	register sz = stack[sp].size;
+	
 	/* check for --boundary--, which mean the end of this level.
 	 */
-	if (candidate[2+sz] == '-' && candidate[3+sz] == '-' && candidate[4+sz] == 0)
+
+	if (line[2+sz] == '-' && line[3+sz] == '-' && line[4+sz] == 0)
 	    popboundary();
-    
-	return (topbound>0) ? stack[topbound-1].level : 0;
+	
+	return 1;
     }
-    return EOF;
+    return 0;
 } /* checkbound */
 
 
@@ -234,6 +192,7 @@ read_headers(FILE* input, struct interesting_headers* info)
     long pos;
     int gotheaders=0;
     char *p;
+    char line[1024];
 
     pos = ftell(input);
     while (get_header(line, sizeof line, input)) {
@@ -242,17 +201,15 @@ read_headers(FILE* input, struct interesting_headers* info)
 	 * here and back off to the beginning of it.
 	 */
 	if (strchr(line, ':') == 0) {
-	    fflush(input);
 	    fseek(input, pos, SEEK_SET);
-	    fflush(input);
 	    break;
 	}
 	else
 	    pos = ftell(input);
 	gotheaders++;
 
-	if ((rc = checkbound(line)) >= 0)
-	    return rc;
+	if (checkbound(line))
+	    return 0;
 
 	if (p = Cstrdup(line, "Mime-version:"))
 	    info->mime_version = p;
@@ -265,7 +222,8 @@ read_headers(FILE* input, struct interesting_headers* info)
     }
     if (gotheaders)
 	info->headers_are_valid = 1;
-    return EOF;
+    fseek(input, savepoint, SEEK_SET);
+    return 1;
 } /* read_headers */
 
 
@@ -333,58 +291,84 @@ fragment(char* string)
 } /* fragment */
 
 
+
+struct about {
+    FILE *input;
+    FILE *output;
+    int linecount;
+};
+
+
+static int
+readline(struct about *io, char *text, int size)
+{
+    if (xfgetline(text, size, io->input) != 0) {
+	if (checkbound(text))
+	    return 0;
+	io->linecount++;
+	strcat(text, "\n");
+	return strlen(text);
+    }
+    return 0;
+}
+
+
+static int
+writechar(struct about *io, char ch)
+{
+    if (io->output)
+	return io->output ? fputc(ch,io->output) : 1;
+}
+
+
 /*
  * read_section() reads lines until we find a boundary or EOF
  */
-static int
+static void
 read_section(FILE* input, Encoder *translator, char* filename)
 {
-    int rc = EOF;
-    int linecount = 0;
-    void *f;
+    struct about io;
+    char *actualname = 0;
 
-    FILE *output = filename ? openfile(filename, line) : 0;
+    if (filename) {
+	actualname = alloca(strlen(filename) + 20);
+	actualname[0] = 0;
+    }
+
+    io.output = filename ? openfile(filename, actualname) : 0;
+    io.input = input;
+    io.linecount = 0;
 
     if (filename)
 	fprintf(stderr, "%s ", filename);
-    if (output && (filename ==0 || strcmp(filename, line) != 0)) {
+    if (io.output && (filename == 0 || strcmp(filename, actualname) != 0)) {
 	if (filename)
 	    fprintf(stderr, "-> ");
-	fprintf(stderr,"%s ", line);
+	fprintf(stderr,"%s ", actualname);
     }
 
-    f = (*translator->open) (output, MIME_DECODE);
-
-    while (xfgetline(line, sizeof line, input) != 0) {
-	rc = checkbound(line);
-
-	if (rc != EOF)
-	    break;
-	linecount++;
-	(*translator->put) (line, sizeof line, f);
+    if ( (*translator->decode)(readline, writechar, &io) == -1 ) {
+	perror("decode");
+	return;
     }
-    (*translator->close) (f);
-    if (output) {
-	fclose(output);
-	fprintf(stderr, "[%d line%s]\n", linecount, (linecount==1)?"":"s");
+    
+    if (io.output) {
+	fclose(io.output);
+	fprintf(stderr, "[%d line%s]\n", io.linecount, (io.linecount==1)?"":"s");
     }
-    return rc;
 } /* read_section */
 
 
 /*
  * eat_section() gobbles up and throws away the junk at the end of a mimed message
  */
-static int
+static void
 eat_section(FILE* input)
 {
-    int rc = EOF;
+    char text[512];
 
-    while (xfgetline(line, sizeof line, input) != 0) {
-	if ((rc = checkbound(line)) != EOF)
-	    break;
-    }
-    return rc;
+    while (xfgetline(text, sizeof text, input) != 0 && !checkbound(text))
+	;
 } /* eat_section */
 
 
@@ -435,31 +419,45 @@ fixfilename(char *fn)
 
 
 /*
+ * uud: picks apart a single-part uuencoded message, ignoring headers
+ *      and separators and everything.  This is backwards compatability
+ *      to replace the uudecode program.
+ */
+void
+uud(FILE *input)
+{
+    struct about io;
+
+    io.input = input;
+    io.output = stdout;
+    io.linecount = 0;
+
+    (uuencode.decode)(readline,writechar,&io);
+    
+    if (isatty(1))
+	fprintf(stderr, "[%d line%s]\n", io.linecount, (io.linecount==1)?"":"s");
+} /* uud */
+
+
+/*
  * read_mime() pulls apart a mimed letter
  */
-static int
-read_mime(FILE* input, int level)
+static void
+read_mime(FILE* input)
 {
     struct interesting_headers headers;
-    int rc;
     char *p;
     char *boundary = 0;
     char *filename = 0;
     Encoder* ofn = &clear;
 
     memset(&headers, 0, sizeof headers);
-    rc = read_headers(input, &headers);
 
-    if (rc != EOF)		/* found a boundary while we were reading the header */
-	return rc;
-
-    if (feof(input))
-	return EOF;
+    if (read_headers(input, &headers) == 0) return;
 
     ofn = get_translator(headers.content_transfer_encoding);
 
-
-    if ((level || headers.mime_version) && headers.content_type) {
+    if ((sp || headers.mime_version) && headers.content_type) {
 
 	for (p = fragment(headers.content_type); p; p = fragment(0)) {
 	    p = skipwhite(p);
@@ -517,63 +515,34 @@ read_mime(FILE* input, int level)
 	     */
 
 	    if (boundary) {
-		pushboundary(boundary, level);
+		pushboundary(boundary);
+		int level = sp;
 
-		for (rc = eat_section(input); rc == level; rc = read_mime(input, 1+level))
-		    ;
-		if (rc != EOF)
-		    rc = eat_section(input);
+		eat_section(input);
+		while (sp == level)
+		    read_mime(input);
 
-		return rc;
+		if (sp != level)
+		    eat_section(input);
+		return;
 	    }
 	}
 	else if (Match(headers.content_type, "message/rfc822"))
-	    return read_mime(input, level);
+	    return read_mime(input);
 
 	/* other types that we might be interested in:
 	 *	image/	-- we should simply ignore these.
 	 *	text/	-- possibly uuencoded.
 	 */
     }
-    if (ofn == &clear && level == 1 && filename == 0) {
+    if (ofn == &clear && sp == 1 && filename == 0) {
 	/* Not mime.  Maybe it's uuencoded? */
 	uud(input);
-	return EOF;
+	return;
     }
 
     return read_section(input, ofn, filename);
 } /* read_mime */
-
-
-/*
- * uud: picks apart a single-part uuencoded message, ignoring headers
- *      and separators and everything.  This is backwards compatability
- *      to replace the uudecode program.
- */
-void
-uud(FILE *input)
-{
-    int rc = EOF;
-    int linecount = 0;
-    MFILE f;
-    char *file;
-
-    if ( (f = (uuencode.open) (isatty(1) ? 0 : stdout, MIME_DECODE)) == 0)
-	return;
-	
-    while (xfgetline(line, sizeof line, input) != 0) {
-	if ( (rc = (uuencode.put)(line, strlen(line), f)) < 0)
-	    break;
-	else if (rc == 1)
-	    linecount++;
-    }
-    if (isatty(1)) {
-	if ( (file = (uuencode.filename)(f)) != 0)
-	    fprintf(stderr, "%s ", file);
-	fprintf(stderr, "[%d line%s]\n", linecount, (linecount==1)?"":"s");
-    }
-    (uuencode.close) (f);
-} /* uud */
 
 
 struct x_option options[] = {
@@ -634,7 +603,7 @@ main(int argc, char **argv)
 	uud(stdin);
     else {
 	stack = malloc(1);
-	read_mime(stdin, 1);
+	read_mime(stdin);
     }
     exit(0);
 }
