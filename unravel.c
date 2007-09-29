@@ -59,6 +59,7 @@ static char *outputfile = 0;	/* fixed output file for uudecode */
 static char *prefix = "part";	/* name for -a files */
 
 char *pgm;
+extern char version[];
 
 #define Match(s,cst_p)	(strncasecmp(s, cst_p, sizeof(cst_p)-1) == 0)
 #define Cstrdup(s, cst_p) (Match(s, cst_p) ? strdup(skipwhite(s+sizeof(cst_p)-1)) : 0)
@@ -370,7 +371,7 @@ read_section(FILE* input, Encoder *translator, char* filename)
 
     namefile(&io,filename,actualname);
 
-    if ( (*translator->decode)(readline, writechar, &io) == -1 ) {
+    if ( (*translator->decode)((mimeread)readline, (mimewrite)writechar, &io) == -1 ) {
 	perror("decode");
 	return;
     }
@@ -484,7 +485,7 @@ uud(FILE *input)
 
 	    namefile(&io, filename, actualname);
 
-	    if ( (uuencode.decode)(readline,writechar,&io) != -1 )
+	    if ( (uuencode.decode)((mimeread)readline,(mimewrite)writechar,&io) != -1 )
 		io.linecount--;
 
 	    if (isatty(1))
@@ -660,7 +661,7 @@ main(int argc, char **argv)
 		prefix = x_optarg;
 		break;
 	case 'V':
-		printf("%s %s\n", pgm, VERSION);
+		printf("%s %s\n", pgm, version);
 		exit(0);
 	default:
 		fprintf(stderr, "\nusage: %s [options] [file]\n\n", pgm);

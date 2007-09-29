@@ -71,11 +71,14 @@ struct x_option options[] = {
 } ;
 #define NROPTIONS	(sizeof options/sizeof options[0])
 
+char *pgm = "unravel";
+
+extern char version[];
 
 void
 die(int code)
 {
-    fprintf(stderr, "\nusage: ravel [options] file [file...]\n\n");
+    fprintf(stderr, "\nusage: %s [options] file [file...]\n\n", pgm);
     showopts(stderr, NROPTIONS, options);
     exit (code);
 }
@@ -118,13 +121,15 @@ main(int argc, char **argv)
     int  tomail = 0;
     char *oflag = 0;
     int  verbose = 0;
-    char *pgm = basename(argv[0]);
-
-#if 0
-    if (strcmp(pgm, "uuencode") == 0) {
-	exit(0);
-    }
+#if HAVE_BASENAME
+    pgm = basename(argv[0]);
+#else
+    if (pgm = strrchr(argv[0], '/'))
+	++pgm;
+    else
+	pgm = argv[0];
 #endif
+
     x_opterr = 1;
     while ((opt = x_getopt(argc, argv, NROPTIONS, options)) != EOF) {
 	switch (opt) {
@@ -159,7 +164,7 @@ main(int argc, char **argv)
 	    verbose = 1;
 	    break;
 	case 'V':
-	    puts("ravel " VERSION);
+	    printf("%s %s\n", pgm, version);
 	    exit(0);
 	default:
 	case 'h':

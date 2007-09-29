@@ -4,7 +4,7 @@
 
 CC=@CC@
 CXX=@CC@
-CFLAGS += @CFLAGS@ -DVERSION=\"@VERSION@\"
+CFLAGS += @CFLAGS@
 CXXFLAGS=$(CFLAGS)
 
 BINDIR=@exedir@
@@ -13,20 +13,23 @@ MANDIR=@mandir@
 MANPAGES=ravel.1 unravel.1 uudecode.1
 PROGS= ravel unravel
 
+OBJS=version.o qp.o base64.o uudecode.o clear.o openfile.o
+
 all: $(PROGS)
 
-ravel: ravel.o qp.o base64.o @OPTIONS@
-	$(CC) $(CFLAGS) -o ravel ravel.o qp.o base64.o @LIBS@ @OPTIONS@
+ravel: ravel.o $(OBJS) @OPTIONS@
+	$(CC) $(CFLAGS) -o ravel ravel.o $(OBJS) @LIBS@ @OPTIONS@
 
-unravel: unravel.o qp.o base64.o clear.o openfile.o uudecode.o @OPTIONS@
-	$(CC) $(CFLAGS) -o unravel unravel.o qp.o base64.o clear.o \
-				   uudecode.o openfile.o @LIBS@ @OPTIONS@
+unravel: unravel.o $(OBJS) @OPTIONS@
+	$(CC) $(CFLAGS) -o unravel unravel.o $(OBJS) @LIBS@ @OPTIONS@
 
+version.c: config.h
+	echo 'char version[] = "@VERSION@";' > version.c
 clean:
 	rm -f ravel unravel *.o
 
 distclean spotless: clean
-	rm -f @CONFIGURE_FILES@ @GENERATED_FILES@
+	rm -f @CONFIGURE_FILES@ @GENERATED_FILES@ version.c
 
 install: install.bin install.man
 
@@ -37,3 +40,5 @@ install.bin: $(PROGS)
 
 install.man: install_manpages $(MANPAGES)
 	./install_manpages $(MANDIR) $(DESTDIR)$(MANPAGES)
+
+$(OBJS): config.h mime_encoding.h
