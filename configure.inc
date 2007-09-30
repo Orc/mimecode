@@ -34,15 +34,6 @@
 #
 ac_default_path="/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin:/usr/X11R6/bin"
 
-test -d /usr/share/man && __sharedir=/share
-
-ac_standard="--src=DIR		where the source lives (.)
---prefix=DIR		where to install the final product (/usr/local)
---execdir=DIR		where to put executables (\$prefix/bin)
---libdir=DIR		where to put libraries (\$prefix/lib)
---mandir=DIR		where to put manpages (\$prefix$__sharedir/man)
---confdir=DIR		where to put configuration information (/etc)"
-
 __fail=exit
 
 if dirname B/A 2>/dev/null >/dev/null; then
@@ -190,7 +181,13 @@ while [ $# -gt 0 ]; do
 	shift 1 ;;
 
     X--help)
-	echo "$ac_standard"
+	test -d ${AC_PREFIX:-/usr/local}/share/man && __sharedir=/share
+	echo "--src=DIR		where the source lives (.)
+--prefix=DIR		where to install the final product (/usr/local)
+--execdir=DIR		where to put executables (\$prefix/bin)
+--libdir=DIR		where to put libraries (\$prefix/lib)
+--mandir=DIR		where to put manpages (\$prefix$__sharedir/man)
+--confdir=DIR		where to put configuration information (/etc)"
 	test "$ac_help" && echo "$ac_help"
 	exit 0;;
 
@@ -548,7 +545,13 @@ EOF
     AC_EXECDIR=${AC_EXECDIR:-$AC_PREFIX/bin}
     AC_LIBDIR=${AC_LIBDIR:-$AC_PREFIX/lib}
     AC_CONFDIR=${AC_CONFDIR:-/etc}
-    AC_MANDIR=${AC_MANDIR:-$AC_PREFIX$__sharedir/man}
+    if [ -z "$AC_MANDIR" ];then
+	if [ -d $AC_PREFIX/share/man ]; then
+	    AC_MANDIR=$AC_PREFIX/share/man
+	else
+	    AC_MANDIR=$AC_PREFIX/man
+	fi
+    fi
 
     AC_PATH=${WITH_PATH:-$PATH}
     AC_PROG_CPP
