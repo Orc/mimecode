@@ -54,6 +54,7 @@ extern Encoder base64;
 extern Encoder quoted_printable;
 
 struct x_option options[] = {
+    { '6', '6', "base64", 0, "encode all attachments in base64" },
     { 's', 's', "subject", "SUBJECT", "Set the subject for this message" },
     { 'm', 'm', "message-id", "MESSAGE-ID", "Use this message-id instead of\n"
 						 "a randomly generated one." },
@@ -119,6 +120,7 @@ main(int argc, char **argv)
     char **to = (char**)malloc(1);
     int  nrto = 0;
     int  tomail = 0;
+    int  all64 = 0;
     char *oflag = 0;
     int  verbose = 0;
 #if HAVE_BASENAME
@@ -133,6 +135,9 @@ main(int argc, char **argv)
     x_opterr = 1;
     while ((opt = x_getopt(argc, argv, NROPTIONS, options)) != EOF) {
 	switch (opt) {
+	case '6':
+	    all64 = 1;
+	    break;
 	case 'f':
 	    from = x_optarg;
 	    break;
@@ -239,13 +244,17 @@ main(int argc, char **argv)
 	           "Content-Disposition: inline; filename=\"%s\"\n",
 			boundary, argv[ix]);
 
-	    sz = fread(block0, 1, sizeof block0, io.input);
-	    for (istextIhope=1,j=0; j < sz; j++)
-		if (!isprint(block0[j]) && block0[j] != '\n'
-					&& block0[j] != '\t') {
-		    istextIhope=0;
-		    break;
-		}
+	    if (all64)
+		istextIhope=0;
+	    else {
+		sz = fread(block0, 1, sizeof block0, io.input);
+		for (istextIhope=1,j=0; j < sz; j++)
+		    if (!isprint(block0[j]) && block0[j] != '\n'
+					    && block0[j] != '\t') {
+			istextIhope=0;
+			break;
+		    }
+	    }
 	    rewind(io.input);
 	    
 	    if (istextIhope) {

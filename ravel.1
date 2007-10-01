@@ -12,7 +12,7 @@
 .Nd extract files from mime-encoded documents
 .Sh SYNOPSIS
 .Nm ravel
-.Op Fl fV
+.Op Fl 6fV
 .Op Fl s Ar subj
 .Op Fl m Ar msgid
 .Op Fl b Ar text
@@ -58,7 +58,9 @@ is able to decode
 .Xr uuencode 5 Ns ed
 documents.
 .Ss Ravel Options
-.Bl -tag -width p-prefix-me -compact -offset indent
+.Bl -tag -width p-prefix-me
+.It Fl 6
+Encode all attachments in base64
 .It Fl h
 Print a help message, then exit.
 .It Fl V
@@ -88,14 +90,14 @@ Attempt to mail this MIME document to the given recipient. (This
 option may be specified multiple times.)
 .El
 .Ss Unravel Options
-.Bl -tag -width p-prefix-me -compact -offset indent
+.Bl -tag -width p-prefix-me
 .It Fl 7
 Write output filenames in 7 bit USASCII.
 .It Fl a
-Write every parts of the mimed file to disk, even if it doesn't have a
+Write every attachment in the mimed file to disk, even if it doesn't have a
 filename specified.   If the
 .Fl p
-option was not specified, these parts will be written to the file(s)
+option was not specified, unnamed attachments will be written to the file(s)
 .Ar part. Ns seq .
 .It Fl h
 Print a help message describing what command-line options are available,

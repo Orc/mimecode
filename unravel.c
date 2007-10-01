@@ -357,7 +357,7 @@ namefile(struct about *io, char *wanted, char *actual)
  * read_section() reads lines until we find a boundary or EOF
  */
 static void
-read_section(FILE* input, Encoder *translator, char* filename)
+read_section(FILE* input, Encoder *code, char* filename)
 {
     struct about io;
     char *actualname = 0;
@@ -371,7 +371,7 @@ read_section(FILE* input, Encoder *translator, char* filename)
 
     namefile(&io,filename,actualname);
 
-    if ( (*translator->decode)((mimeread)readline, (mimewrite)writechar, &io) == -1 ) {
+    if ( (*code->decode)((mimeread)readline, (mimewrite)writechar, &io) < 0 ) {
 	perror("decode");
 	return;
     }
@@ -452,14 +452,22 @@ uud(FILE *input)
 {
     struct about io;
     char line[1024];
-    char *p, *filename, *actualname;
+    char *p, *fi, *filename;
     unsigned int perms = 0644;
+    Encoder *code;
+
+#define LIKE(l,p)	( strncasecmp(l,p,(sizeof p) - 1) == 0 )
 
     while (xfgetline(line, sizeof line, input))
-	if (strncasecmp(line, "begin ", 6) == 0) {
-	    perms = (unsigned int)strtol(line+6, &p, 8);
+	if (LIKE(line, "begin ") || LIKE(line, "begin-base64 ")) {
+	    code = (line[5] == '-') ? &base64
+				    : &uuencode;
 
-	    if (p == line+6) error("badly formed uuencode ``begin'' line");
+	    for (fi = line; *fi && !isspace(*fi); ++fi)
+		;
+	    perms = (unsigned int)strtol(fi, &p, 8);
+
+	    if (p == fi) error("badly formed uuencode ``begin'' line");
 
 	    perms &= 0777;	/* mask off unwanted mode bits */
 
@@ -474,24 +482,7 @@ uud(FILE *input)
 
 	    if (*filename == 0) error("badly formed uuencode ``begin'' line");
 
-	    if (outputfile) filename = outputfile;
-
-	    actualname = alloca(strlen(filename)+20);
-	    actualname[0] = 0;
-
-	    io.input = input;
-	    io.output = openfile(filename, prefix, actualname);
-	    io.linecount = 0;
-
-	    namefile(&io, filename, actualname);
-
-	    if ( (uuencode.decode)((mimeread)readline,(mimewrite)writechar,&io) != -1 )
-		io.linecount--;
-
-	    if (isatty(1))
-		fprintf(stderr, "[%d line%s]\n",
-				io.linecount,
-				(io.linecount==1)?"":"s");
+	    read_section(input, code, outputfile ? outputfile : filename);
 	}
 } /* uud */
 

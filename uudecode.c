@@ -73,14 +73,14 @@ uudecode(mimeread read, mimewrite write, void *ctx)
     while ( (size = (*read)(ctx, text, sizeof text)) > 0 ) {
 
 	if (strcasecmp(text, "end\n") == 0 || strcasecmp(text, "end\r\n") == 0)
-	    break;
+	    return 1;
 
 	/*
 	 * `n' is used to avoid writing out all the characters
 	 * at the end of the file.
 	 */
 	if ((n = DEC(*text)) <= 0)
-	    break;
+	    continue;
 	for (p = 1+text; n > 0; p += 4, n -= 3) {
 	    if (n >= 3) {
 		ch = DEC(p[0]) << 2 | DEC(p[1]) >> 4;
@@ -106,7 +106,7 @@ uudecode(mimeread read, mimewrite write, void *ctx)
 	    }
 	}
     }
-    return 1;
+    return 0;
 } /* uudecode */
 
 struct mime_encoding uuencode = { "text/uuencode", 0, uudecode };

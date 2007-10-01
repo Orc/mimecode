@@ -84,7 +84,7 @@ decode( mimeread read, mimewrite write, void *context)
     while ( (size = (*read)(context, line, sizeof line)) > 0 ) {
 	code = line;
 
-	while ( (size > 0) && (code[0] != '=') ) {
+	while ( (size >= 4) && (code[0] != '=') ) {
 	    c[0] = X64dec[code[0]];
 	    c[1] = X64dec[code[1]];
 	    c[2] = X64dec[code[2]];
@@ -103,7 +103,7 @@ decode( mimeread read, mimewrite write, void *context)
 	    size -= 4;
 	}
     }
-    return 0;
+    return 1;
 } /* decode */
 
 
