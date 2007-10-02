@@ -9,11 +9,13 @@
 
 typedef int (*mimeread)(void*,char*,int);
 typedef int (*mimewrite)(void*,char);
+typedef int (*mimeclosehook)(void*,char*);
 
 
 typedef struct {
     FILE *input;
     FILE *output;
+    int linecount;
 } context;
 
 typedef struct mime_encoding {

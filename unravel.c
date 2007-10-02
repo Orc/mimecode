@@ -310,20 +310,12 @@ fragment(char* string)
 
 
 
-struct about {
-    FILE *input;
-    FILE *output;
-    int linecount;
-};
-
-
 static int
-readline(struct about *io, char *text, int size)
+readline(context *io, char *text, int size)
 {
     if (xfgetline(text, size, io->input) != 0) {
 	if (checkbound(text))
 	    return 0;
-	io->linecount++;
 	strcat(text, "\n");
 	return strlen(text);
     }
@@ -332,15 +324,17 @@ readline(struct about *io, char *text, int size)
 
 
 static int
-writechar(struct about *io, char ch)
+writechar(context *io, char ch)
 {
+    if (ch == '\n')
+	io->linecount++;
     if (io->output)
 	return io->output ? fputc(ch,io->output) : 1;
 }
 
 
 static void
-namefile(struct about *io, char *wanted, char *actual)
+namefile(context *io, char *wanted, char *actual)
 {
     if (wanted)
 	fprintf(stderr, "%s ", wanted);
@@ -357,17 +351,16 @@ namefile(struct about *io, char *wanted, char *actual)
  * read_section() reads lines until we find a boundary or EOF
  */
 static void
-read_section(FILE* input, Encoder *code, char* filename)
+read_section(FILE* input, Encoder *code, char* filename, int mode)
 {
-    struct about io;
+    context io = { NULL, NULL };
     char *actualname = 0;
 
     actualname = alloca((filename ? strlen(filename) : strlen(prefix)) + 40);
     actualname[0] = 0;
 
-    io.output = openfile(filename, prefix, actualname);
     io.input = input;
-    io.linecount = 0;
+    io.output = openfile(filename, prefix, actualname);
 
     namefile(&io,filename,actualname);
 
@@ -377,6 +370,7 @@ read_section(FILE* input, Encoder *code, char* filename)
     }
     
     if (io.output) {
+	if (mode) fchmod(fileno(io.output), mode);
 	fclose(io.output);
 	fprintf(stderr, "[%d line%s]\n", io.linecount, (io.linecount==1)?"":"s");
     }
@@ -450,7 +444,7 @@ fixfilename(char *fn)
 void
 uud(FILE *input)
 {
-    struct about io;
+    context io;
     char line[1024];
     char *p, *fi, *filename;
     unsigned int perms = 0644;
@@ -482,7 +476,8 @@ uud(FILE *input)
 
 	    if (*filename == 0) error("badly formed uuencode ``begin'' line");
 
-	    read_section(input, code, outputfile ? outputfile : filename);
+	    read_section(input, code, outputfile ? outputfile
+						 : filename, perms);
 	}
 } /* uud */
 
@@ -585,7 +580,8 @@ read_mime(FILE* input)
 	return;
     }
 
-    return (filename||save_them_all) ? read_section(input, ofn, filename) : eat_section(input);
+    return (filename||save_them_all) ? read_section(input, ofn, filename, 0)
+				     : eat_section(input);
 } /* read_mime */
 
 

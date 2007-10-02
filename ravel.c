@@ -108,7 +108,7 @@ main(int argc, char **argv)
     char block0[512];
     int j, sz;
     int istextIhope;
-    context io;
+    context io = { NULL, NULL };
     int opt;
     struct utsname sys;
     time_t now;
@@ -123,6 +123,7 @@ main(int argc, char **argv)
     int  all64 = 0;
     char *oflag = 0;
     int  verbose = 0;
+
 #if HAVE_BASENAME
     pgm = basename(argv[0]);
 #else
