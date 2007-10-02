@@ -1,0 +1,12 @@
+MIMECODE contains a mime packer, a mime unpacker, and (optionally)
+a uuencode and uudecode that understand the newer base64 uuencode
+format.
+
+MIMECODE is free software;  it is released under a BSD-style license
+that allows you to do as you wish with it as long as you don't attempt
+to claim it as your own work.
+
+Most of the programs included in the MIMECODE distribution have
+manual pages describing how they work.
+
+The file INSTALL describes how to build and install mimecode
