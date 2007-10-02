@@ -1,8 +1,22 @@
 #! /bin/sh
 
+ac_help='--enable-uuencode	Install uuencode/uudecode binaries'
+LOCAL_AC_OPTIONS='case "$1" in
+                  --enable-uuencode) ENABLE_UUE=T; shift ;;
+		  *) ac_error=T;;
+		  esac'
+
 . ./configure.inc
 
 AC_INIT mimecode
+
+
+if [ "$ENABLE_UUE" ]; then
+    AC_SUB MKUUE ''
+else
+    AC_SUB MKUUE '#'
+fi
+
 
 AC_PROG_CC || exit 1
 
@@ -30,6 +44,9 @@ AC_CHECK_HEADERS errno.h
 test "$OS_FREEBSD" || AC_CHECK_HEADERS malloc.h
 
 AC_CHECK_FIELD utsname domainname sys/utsname.h
+
+AC_CHECK_FUNCS basename
+AC_CHECK_HEADERS libgen.h	# FreeBSD; contains prototype for basename()
 
 VERSION=`cat VERSION`
 AC_SUB VERSION ${VERSION:-1.0}

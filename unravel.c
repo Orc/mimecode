@@ -7,6 +7,9 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <unistd.h>
+#if HAVE_LIBGEN_H
+#include <libgen.h>
+#endif
 #include <errno.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -77,6 +80,17 @@ error(char *fmt, ...)
     va_end(ptr);
     exit(1);
 }
+
+
+#if !HAVE_BASENAME
+char *
+basename(char *p)
+{
+    char *r = strrchr(p, '/');
+
+    return r ? (1+r) : p;
+}
+#endif
 
 
 /*
@@ -421,11 +435,10 @@ fixfilename(char *fn)
 {
     char *from, *to;
 
-    for (to = from = fn; *from; ++from) {
+
+    for (to = fn, from = basename(fn); *from; ++from) {
 	if (sevenbit)
 	    *from &= 0x7f;
-	if (*from == ':' || *from == '/' || *from == '\\')
-	    continue;
 	if (to != from)
 	    *to = *from;
 	++to;
@@ -447,7 +460,7 @@ uud(FILE *input)
     context io;
     char line[1024];
     char *p, *fi, *filename;
-    unsigned int perms = 0644;
+    unsigned int mode = 0644;
     Encoder *code;
 
 #define LIKE(l,p)	( strncasecmp(l,p,(sizeof p) - 1) == 0 )
@@ -459,11 +472,11 @@ uud(FILE *input)
 
 	    for (fi = line; *fi && !isspace(*fi); ++fi)
 		;
-	    perms = (unsigned int)strtol(fi, &p, 8);
+	    mode = (unsigned int)strtol(fi, &p, 8);
 
 	    if (p == fi) error("badly formed uuencode ``begin'' line");
 
-	    perms &= 0777;	/* mask off unwanted mode bits */
+	    mode &= 0777;	/* mask off unwanted mode bits */
 
 	    while (isspace(*p)) ++p;
 	    if (*p == '"') {
@@ -477,7 +490,7 @@ uud(FILE *input)
 	    if (*filename == 0) error("badly formed uuencode ``begin'' line");
 
 	    read_section(input, code, outputfile ? outputfile
-						 : filename, perms);
+						 : fixfilename(filename), mode);
 	}
 } /* uud */
 
@@ -611,10 +624,7 @@ main(int argc, char **argv)
 
     x_opterr = 1;
 
-    if ( (pgm = strrchr(argv[0], '/')) == 0)
-	pgm = argv[0];
-    else
-	pgm++;
+    pgm = basename(argv[0]);
 
     if (strcasecmp(pgm, "uudecode") == 0)
 	uudecode = 1;

@@ -10,7 +10,8 @@ CXXFLAGS=$(CFLAGS)
 BINDIR=@exedir@
 MANDIR=@mandir@
 
-MANPAGES=ravel.1 unravel.1 uudecode.1 uuencode.5
+@MKUUE@UUEPAGES=uuencode.1 uudecode.1 uuencode.5
+MANPAGES=ravel.1 unravel.1 $(UUEPAGES)
 PROGS= ravel unravel
 
 OBJS=version.o qp.o base64.o uudecode.o clear.o openfile.o
@@ -36,7 +37,8 @@ install: install.bin install.man
 install.bin: $(PROGS)
 	@INSTALL_DIR@ $(DESTDIR)$(BINDIR)
 	@INSTALL_PROGRAM@ $(PROGS) $(DESTDIR)$(BINDIR)
-	ln -fs unravel $(DESTDIR)$(BINDIR)/uudecode
+@MKUUE@	ln -fs unravel $(DESTDIR)$(BINDIR)/uudecode
+@MKUUE@	ln -fs ravel $(DESTDIR)$(BINDIR)/uuencode
 
 install.man: install_manpages $(MANPAGES)
 	./install_manpages $(MANDIR) $(DESTDIR)$(MANPAGES)

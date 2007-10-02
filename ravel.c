@@ -84,23 +84,30 @@ void
 douuencode(context *io, int base64please, int argc, char **argv)
 {
     struct stat sb;
-    int mode = 644;
-    char *name = (argc > 1) ? argv[1] : argv[0];
+    int mode = 0644;
+    char *name;
     Encoder *code = base64please ? &base64 : &uuencode;
 
-    if ((io->input = fopen(argv[0], "r")) != 0) {
-	if (fstat(fileno(io->input), &sb) != -1)
-	    mode = sb.st_mode & 0777;
-
-	fprintf(io->output, "begin%s %o %s\n",
-		    base64please ? "-base64" : "", mode, name);
-	(*code->encode)((mimeread)readblock, (mimewrite)writechar, io);
-	fprintf(io->output, base64please ? "====\n" : "end\n");
-	fclose(io->output);
-	exit(0);
+    if (argc == 1) {
+	name = argv[0];
+	io->input = stdin;
     }
-    perror(argv[0]);
-    exit(1);
+    else {
+	name = argv[1];
+	if ( (io->input = fopen(argv[0], "r")) == 0 ) {
+	    perror(argv[0]);
+	    exit(1);
+	}
+	if ( fstat(fileno(io->input), &sb) != -1 )
+	    mode = sb.st_mode & 0777;
+    }
+
+    fprintf(io->output, "begin%s %o %s\n",
+			base64please ? "-base64" : "", mode, name);
+    (*code->encode)((mimeread)readblock, (mimewrite)writechar, io);
+    fprintf(io->output, base64please ? "====\n" : "end\n");
+    fclose(io->output);
+    exit(0);
 }
 
 
