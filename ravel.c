@@ -56,8 +56,16 @@ int nropts;
 void
 die(int code)
 {
+#if HAVE_SETBUFFER
+    char buffer[1024];
+    setbuffer(stderr, buffer, sizeof buffer);
+#endif
     fprintf(stderr, "\nusage: %s [options] file [file...]\n\n", pgm);
     showopts(stderr, nropts, opts);
+#if HAVE_SETBUFFER
+    fflush(stderr);
+    setbuf(stderr, NULL);
+#endif
     exit (code);
 }
 

@@ -17,6 +17,7 @@
 #include <string.h>
 #include <basis/options.h>
 
+extern int overwrite;
 FILE* openfile(char*, char*, char*);
 
 #include "mime_encoding.h"
@@ -57,6 +58,7 @@ static int sp = 0;
 static int verbose = 0;		/* spit out needed debugging */
 static int save_them_all = 0;	/* write all valid fragments */
 static int sevenbit = 0;	/* force filenames to usascii */
+static int clip = 0;		/* strip paths off output filenames */
 
 static char *outputfile = 0;	/* fixed output file for uudecode */
 static char *prefix = "part";	/* name for -a files */
@@ -427,16 +429,15 @@ get_translator(char* content_transfer_encoding)
 
 
 /*
- * fixfilename() rewrites a filename so that it doesn't include directory
- *               separators, backslashes, or ``:''
+ * fixfilename() tweaks filenames to optionally strip to 7bit ascii (-7)
+ *               and to chop the path off (-c).
  */
 char *
-fixfilename(char *fn)
+fixfilename(char *path)
 {
     char *from, *to;
 
-
-    for (to = fn, from = basename(fn); *from; ++from) {
+    for (to = path, from = clip ? basename(path) : path; *from; ++from) {
 	if (sevenbit)
 	    *from &= 0x7f;
 	if (to != from)
@@ -445,7 +446,7 @@ fixfilename(char *fn)
     }
     if (to != from)
 	*to = 0;
-    return fn;
+    return path;
 } /* fixfilename */
 
 
@@ -599,22 +600,42 @@ read_mime(FILE* input)
 
 
 struct x_option ropts[] = {
-    { '7', '7', "7bit",    0, "Force filenames to 7 bit ascii" },
-    { 'a', 'a', "all",     0, "Write all document fragments to files" },
-    { 'h', 'h', "help",    0, "Show this message" },
-    { 'p', 'p', "prefix",  "PFX", "set document prefix to PFX" },
-    { 'v', 'v', "verbose", 0, "Display progress messages" },
-    { 'V', 'V', "version", 0, "Show the version number, then exit" }
+    { '7', '7', "7bit",     0, "Force filenames to 7 bit ascii" },
+    { 'a', 'a', "all",      0, "Write all document fragments to files" },
+    { 'c', 'c', "current",  0, "extract attachments to the current directory"},
+    { 'f', 'f', "overwrite",0, "Overwrite existing files" },
+    { 'h', 'h', "help",     0, "Show this message" },
+    { 'p', 'p', "prefix","PFX","set document prefix to PFX" },
+    { 'v', 'v', "verbose",  0, "Display progress messages" },
+    { 'V', 'V', "version",  0, "Show the version number, then exit" }
 };
 
 struct x_option uopts[] = {
-    { '7', '7', "7bit",    0, "Force filenames to 7 bit ascii" },
-    { 'o', 'o', "output", "FILE", "Write output to FILE" },
-    { 'v', 'v', "verbose", 0, "Display progress messages" },
-    { 'V', 'V', "version", 0, "Show the version number, then exit" }
+    { '7', '7', "7bit",     0, "Force filenames to 7 bit ascii" },
+    { 'c', 'c', "current",  0, "write the decoded file to the current directory"},
+    { 'f', 'f', "overwrite",0, "Overwrite existing files" },
+    { 'o', 'o', "output","FILE","Write output to FILE" },
+    { 'v', 'v', "verbose",  0, "Display progress messages" },
+    { 'V', 'V', "version",  0, "Show the version number, then exit" }
 };
 #define SIZE(opt) (sizeof opt/sizeof opt[0])
 
+
+static void
+die(int exitcode, int nropts, struct x_option *opts)
+{
+#if HAVE_SETBUFFER
+    char iob[1024];
+    setbuffer(stderr, iob, sizeof iob);
+#endif
+    fprintf(stderr, "\nusage: %s [options] [file]\n\n", pgm);
+    showopts(stderr, nropts, opts);
+#if HAVE_SETBUFFER
+    fflush(stderr);
+    setbuf(stderr, 0);
+#endif
+    exit(exitcode);
+}
 
 main(int argc, char **argv)
 {
@@ -643,6 +664,12 @@ main(int argc, char **argv)
 	case '7':
 		sevenbit++;
 		break;
+	case 'c':
+		clip++;
+		break;
+	case 'f':
+		overwrite++;
+		break;
 	case 'v':
 		verbose++;
 		break;
@@ -662,9 +689,7 @@ main(int argc, char **argv)
 		printf("%s %s\n", pgm, version);
 		exit(0);
 	default:
-		fprintf(stderr, "\nusage: %s [options] [file]\n\n", pgm);
-		showopts(stderr, nropts, opts);
-		exit (opt == 'h' ? 0 : 1);
+		die( (opt == 'h') ? 0 : 1, nropts, opts );
 	}
     }
 

@@ -21,7 +21,7 @@
 .Op Fl t Ar recipient
 .Ar file(s)
 .Nm unravel
-.Op Fl 7hvaV
+.Op Fl 7cfhvaV
 .Op Fl p Ar prefix
 .Op Ar file
 .Sh DESCRIPTION
@@ -52,6 +52,10 @@ encoding, and for binary files the base64 encoding.
 breaks apart
 .Ar files
 (or by default, the standard input) into their original form.
+Unless the
+.Fl f
+option is given, it will not write over existing files, but will
+create and write to a new file.
 Additionally, 
 .Nm unravel
 is able to decode 
@@ -99,6 +103,10 @@ filename specified.   If the
 .Fl p
 option was not specified, unnamed attachments will be written to the file(s)
 .Ar part. Ns seq .
+.It Fl c
+Extract attachments to the current directory.
+.It Fl f
+Replace existing files.
 .It Fl h
 Print a help message describing what command-line options are available,
 then exit.
@@ -107,11 +115,12 @@ Print debugging and progress messages.
 .It Fl V
 Print what version this is, then exit.
 .It Fl p Ar prefix
-Write unnamed mime-fragments to
+Write unnamed attachments to
 .Ar prefix Ns .seq
 .El
 .Sh SEE ALSO
-.Xr uuencode 5 ,
-.Xr uudecode 1
+.Xr uudecode 1 ,
+.Xr uuencode 1 ,
+.Xr uuencode 5 .
 .Sh AUTHOR
 David Parsons (orc@pell.chi.il.us)
