@@ -1,38 +1,4 @@
 /*
- *   Copyright (c) 1996 David Parsons. All rights reserved.
- *   
- *   Redistribution and use in source and binary forms, with or without
- *   modification, are permitted provided that the following conditions
- *   are met:
- *  1. Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *  2. Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *  3. All advertising materials mentioning features or use of this
- *     software must display the following acknowledgement:
- *     
- *   This product includes software developed by David Parsons
- *   (orc@pell.chi.il.us)
- *
- *  4. My name may not be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *     
- *  THIS SOFTWARE IS PROVIDED BY DAVID PARSONS ``AS IS'' AND ANY
- *  EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- *  THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
- *  PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL DAVID
- *  PARSONS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- *  EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
- *  TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- *  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- *  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
- *  IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
- *  THE POSSIBILITY OF SUCH DAMAGE.
- */
-/*
  * ravel: builds a mime file from a list of input files
  */
 #include "config.h"
@@ -40,6 +6,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include "mime_encoding.h"
@@ -50,10 +17,16 @@
 
 #include <paths.h>
 
-extern Encoder base64;
-extern Encoder quoted_printable;
+extern Encoder base64, uuencode, quoted_printable;
 
-struct x_option options[] = {
+struct x_option uuencopts[] = {
+    { 'm', 'm', "base64", 0, "use base64 encoding" },
+    { 'o', 'o', "output", "FILE", "write encoded output to FILE" },
+    { 'V', 'V', "version", 0, "Show the current version, then exit" },
+} ;
+
+
+struct x_option ravelopts[] = {
     { '6', '6', "base64", 0, "encode all attachments in base64" },
     { 's', 's', "subject", "SUBJECT", "Set the subject for this message" },
     { 'm', 'm', "message-id", "MESSAGE-ID", "Use this message-id instead of\n"
@@ -70,17 +43,21 @@ struct x_option options[] = {
     { 'v', 'v', "verbose", 0, "be somewhat chatty" },
     { 'V', 'V', "version", 0, "Show the current version, then exit" },
 } ;
-#define NROPTIONS	(sizeof options/sizeof options[0])
 
-char *pgm = "unravel";
+#define SIZ(a)	(sizeof a / sizeof a[0])
+
 
 extern char version[];
+
+char *pgm = "unravel";
+struct x_option *opts;
+int nropts;
 
 void
 die(int code)
 {
     fprintf(stderr, "\nusage: %s [options] file [file...]\n\n", pgm);
-    showopts(stderr, NROPTIONS, options);
+    showopts(stderr, nropts, opts);
     exit (code);
 }
 
@@ -93,12 +70,37 @@ readblock(void *ctx, char *block, int size)
     return fread(block, 1, size, io->input);
 }
 
+
 static int
 writechar(void *ctx, char ch)
 {
     context *io = ctx;
     
     return fputc(ch, io->output);
+}
+
+
+void
+douuencode(context *io, int base64please, int argc, char **argv)
+{
+    struct stat sb;
+    int mode = 644;
+    char *name = (argc > 1) ? argv[1] : argv[0];
+    Encoder *code = base64please ? &base64 : &uuencode;
+
+    if ((io->input = fopen(argv[0], "r")) != 0) {
+	if (fstat(fileno(io->input), &sb) != -1)
+	    mode = sb.st_mode & 0777;
+
+	fprintf(io->output, "begin%s %o %s\n",
+		    base64please ? "-base64" : "", mode, name);
+	(*code->encode)((mimeread)readblock, (mimewrite)writechar, io);
+	fprintf(io->output, base64please ? "====\n" : "end\n");
+	fclose(io->output);
+	exit(0);
+    }
+    perror(argv[0]);
+    exit(1);
 }
 
 
@@ -123,6 +125,8 @@ main(int argc, char **argv)
     int  all64 = 0;
     char *oflag = 0;
     int  verbose = 0;
+    int  uue = 0;
+    int  base64please = 0;
 
 #if HAVE_BASENAME
     pgm = basename(argv[0]);
@@ -133,8 +137,18 @@ main(int argc, char **argv)
 	pgm = argv[0];
 #endif
 
+    if (strcasecmp(pgm, "uuencode") == 0) {
+	uue = 1;
+	opts = uuencopts;
+	nropts = SIZ(uuencopts);
+    }
+    else {
+	opts = ravelopts;
+	nropts = SIZ(ravelopts);
+    }
+
     x_opterr = 1;
-    while ((opt = x_getopt(argc, argv, NROPTIONS, options)) != EOF) {
+    while ((opt = x_getopt(argc, argv, nropts, opts)) != EOF) {
 	switch (opt) {
 	case '6':
 	    all64 = 1;
@@ -146,7 +160,10 @@ main(int argc, char **argv)
 	    subject = x_optarg;
 	    break;
 	case 'm':
-	    messageid = x_optarg;
+	    if (uue)
+		base64please = 1;
+	    else
+		messageid = x_optarg;
 	    break;
 	case 'b':
 	    boundary = x_optarg;
@@ -174,11 +191,24 @@ main(int argc, char **argv)
 	    exit(0);
 	default:
 	case 'h':
-	    die( opt == 'j' ? 0 : 1);
+	    die( opt == 'h' ? 0 : 1);
 	}
     }
     if (argc == x_optind)
 	die(1);
+
+    if ( oflag && (nrto > 0) ) {
+	fprintf(stderr, "%s: can't specify both -o and -t\n", pgm);
+	exit(1);
+    }
+
+    io.output = stdout;
+    if (oflag && ((io.output = fopen(oflag, "w")) == 0) ) {
+	perror(oflag);
+	exit(1);
+    }
+
+    if (uue) douuencode(&io, base64please, argc-x_optind, argv+x_optind);
 
     if (boundary == 0)
 	boundary = "Hello, Sailor";
@@ -198,13 +228,7 @@ main(int argc, char **argv)
 	messageid = template;
     }
 
-    if (oflag) {
-	if ((io.output = fopen(oflag, "w")) == 0) {
-	    perror(oflag);
-	    exit(1);
-	}
-    }
-    else if (nrto > 0) {
+    if (nrto > 0) {
 	if ((io.output = popen(_PATH_SENDMAIL " -U -t", "w")) == 0) {
 	    perror("sendmail");
 	    exit(1);

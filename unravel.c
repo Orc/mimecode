@@ -598,6 +598,7 @@ struct x_option uopts[] = {
     { '7', '7', "7bit",    0, "Force filenames to 7 bit ascii" },
     { 'o', 'o', "output", "FILE", "Write output to FILE" },
     { 'v', 'v', "verbose", 0, "Display progress messages" },
+    { 'V', 'V', "version", 0, "Show the version number, then exit" }
 };
 #define SIZE(opt) (sizeof opt/sizeof opt[0])
 

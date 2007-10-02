@@ -31,8 +31,7 @@
  * SUCH DAMAGE.
  */
 
-static const char copyright[] = "@(#) Copyright (c) 1983, 1993\n"
-"The Regents of the University of California.All rights reserved. \n";
+static const char copyright[] = "@(#) Copyright (c) 1983, 1993\nThe Regents of the University of California.All rights reserved. \n";
 
 static const char sccsid[] = "@(#)uudecode.c	8.2 (Berkeley) 4/2/94";
 
@@ -53,14 +52,38 @@ static const char sccsid[] = "@(#)uudecode.c	8.2 (Berkeley) 4/2/94";
 
 #define Write(ctx,ch)	if ( (*write)(ctx,ch) == -1) return -1
 
+/* ENC is the basic 1 character encoding function to make a char printing */
+#define	ENC(c) ((c) ? ((c) & 077) + ' ': '`')
 
-/*
- * uudecode() handles a line from a uuencoded file.  It only decodes one thing per
- * open/close session -- if we want to handle multiple uuencoded items in a file,
- * we need to have a way to pass this information up to the calling process.
- */
 static int
-uudecode(mimeread read, mimewrite write, void *ctx)
+encode(mimeread read, mimewrite write, void *ctx)
+{
+    register int ch, n;
+    register char *p;
+    char buf[80];
+
+    while ( (n = (*read)(ctx, buf, 45)) > 0 ) {
+	ch = ENC(n);
+	Write(ctx,ch);
+	for (p = buf; n > 0; n -= 3, p += 3) {
+	    ch = *p >> 2;
+	    Write(ctx, ENC(ch));
+	    ch = (*p << 4) & 060 | (p[1] >> 4) & 017;
+	    Write(ctx, ENC(ch));
+	    ch = (p[1] << 2) & 074 | (p[2] >> 6) & 03;
+	    Write(ctx, ENC(ch));
+	    ch = p[2] & 077;
+	    Write(ctx, ENC(ch));
+	}
+	Write(ctx,'\n');
+    }
+    Write(ctx, ENC('\0'));
+    Write(ctx, '\n');
+}
+
+
+static int
+decode(mimeread read, mimewrite write, void *ctx)
 {
 #define	DEC(c)	(((c) - ' ') & 077)	/* single character decode */
 
@@ -107,6 +130,6 @@ uudecode(mimeread read, mimewrite write, void *ctx)
 	}
     }
     return 0;
-} /* uudecode */
+} /* decode */
 
-struct mime_encoding uuencode = { "text/uuencode", 0, uudecode };
+struct mime_encoding uuencode = { "text/uuencode", encode, decode };
