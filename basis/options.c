@@ -165,7 +165,6 @@ showopts(FILE *dest, int optcount, struct x_option *opts)
     argindent += 2;	/* leading space */
     optindent += 2;	/* leading -- */
 
-
     for (n = 0; n < optcount; n++) {
 	if (opts[n].optval == 0)
 	    continue;

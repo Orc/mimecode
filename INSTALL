@@ -1,0 +1,33 @@
+
+		    HOW TO BUILD AND INSTALL MIMECODE
+
+1) Unpacking the distribution
+
+The MIMECODE sources are distributed in tarballs.  After extracting from
+the tarball, you should end up with all the source and build files in the
+directory
+		mimecode-(version)
+
+2) Installing the distribution
+
+MIMECODE uses configure.sh to set itself up for compilation.   To run
+configure, just do ``./configure.sh'' and it will check your system for
+build dependencies and build makefiles for you.   If configure.sh finishes
+without complaint, you can then do a ``make'' to compile everything and a
+``make install'' to install the binaries.
+
+Configure.sh has a few options that can be set:
+
+    --src=DIR		where the source lives (.)
+    --prefix=DIR	where to install the final product (/usr/local)
+    --execdir=DIR	where to put executables (prefix/bin)
+    --libdir=DIR	where to put libraries (prefix/lib)
+    --mandir=DIR	where to put manpages (prefix/man)
+    --confdir=DIR	where to put configuration information (/etc)
+
+    --enable-uuencode	build the uuencode/uudecode programs and manpages
+
+Configure.sh attempts to guess whether to put manpages into $prefix/man
+or $prefix/share/man.  This is fairly new code, so it may not get it
+right.   Running ``make -n install'' will show you where it wants to
+place the manpages.

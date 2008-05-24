@@ -12,7 +12,7 @@
 .Nd extract files from mime-encoded documents
 .Sh SYNOPSIS
 .Nm ravel
-.Op Fl 6fV
+.Op Fl 6fvV
 .Op Fl s Ar subj
 .Op Fl m Ar msgid
 .Op Fl b Ar text
@@ -21,7 +21,7 @@
 .Op Fl t Ar recipient
 .Ar file(s)
 .Nm unravel
-.Op Fl 7hvaV
+.Op Fl 7cfhvaV
 .Op Fl p Ar prefix
 .Op Ar file
 .Sh DESCRIPTION
@@ -36,7 +36,7 @@ data.
 .Pp
 .Nm Ravel
 reads
-.Nm files
+.Ar files
 and writes an mime-encoded version
 to the standard output (or mails it if recipients are given
 via the
@@ -52,6 +52,10 @@ encoding, and for binary files the base64 encoding.
 breaks apart
 .Ar files
 (or by default, the standard input) into their original form.
+Unless the
+.Fl f
+option is given, it will not write over existing files, but will
+create and write to a new file.
 Additionally, 
 .Nm unravel
 is able to decode 
@@ -61,33 +65,41 @@ documents.
 .Bl -tag -width p-prefix-me
 .It Fl 6
 Encode all attachments in base64
-.It Fl h
-Print a help message, then exit.
-.It Fl V
-Print what version this is, then exit.
-.It Fl s Ar subject
-Use the given
-.Ar subject
-on the Subject: line of the mime-encoded document (the default is
-.Ar "Mime-encoded files"\fR)
-.It Fl m Ar message-id
-Use the given
-.Ar message-id
-for the mime-encoded document, instead of a machine-generated one.
 .It Fl b Ar boundary-string
 Use the given
 .Ar boundary
 .Ar string
 to separate the elements in the
 encoded message.
+.It Fl f Ar sender
+Claim that the mime document is from
+.Ar sender .
+.It Fl h
+Print a help message, then exit.
+.It Fl m Ar message-id
+Use the given
+.Ar message-id
+for the mime-encoded document, instead of a machine-generated one.
+.It Fl o Ar file
+Write the mime document to
+.Ar file .
 .It Fl p Ar text
 MIME documents traditionally come with a little header saying that
 this is a mime document and you may not be able to read it unless
 you've got a mime-capable document reader.  You may replace this
 message with any (single line) message that you choose.
+.It Fl s Ar subject
+Use the given
+.Ar subject
+on the Subject: line of the mime-encoded document (the default is
+.Ar "Mime-encoded files"\fR)
 .It Fl t Ar recipient
 Attempt to mail this MIME document to the given recipient. (This
 option may be specified multiple times.)
+.It Fl v
+Print debugging and progress messages.
+.It Fl V
+Print what version this is, then exit.
 .El
 .Ss Unravel Options
 .Bl -tag -width p-prefix-me
@@ -99,6 +111,10 @@ filename specified.   If the
 .Fl p
 option was not specified, unnamed attachments will be written to the file(s)
 .Ar part. Ns seq .
+.It Fl c
+Extract attachments to the current directory.
+.It Fl f
+Replace existing files.
 .It Fl h
 Print a help message describing what command-line options are available,
 then exit.
@@ -107,11 +123,12 @@ Print debugging and progress messages.
 .It Fl V
 Print what version this is, then exit.
 .It Fl p Ar prefix
-Write unnamed mime-fragments to
+Write unnamed attachments to
 .Ar prefix Ns .seq
 .El
 .Sh SEE ALSO
-.Xr uuencode 5 ,
-.Xr uudecode 1
+.Xr uudecode 1 ,
+.Xr uuencode 1 ,
+.Xr uuencode 5 .
 .Sh AUTHOR
 David Parsons (orc@pell.chi.il.us)

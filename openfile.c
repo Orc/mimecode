@@ -11,6 +11,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+int overwrite = 0;
+
 FILE*
 openfile(char* filename, char *defaultname, char *actualname)
 {
@@ -19,23 +21,12 @@ openfile(char* filename, char *defaultname, char *actualname)
     unsigned int seq = 0;
     int fd;
     int idx;
+    int openmode = overwrite ? O_WRONLY|O_CREAT : O_WRONLY|O_EXCL|O_CREAT;
     char *p;
     char *append;
 
     if (filename) {
-	for (p = filename; *p; ++p)
-	    if (*p == '/' || *p == '\\')
-		break;
-
-	if (*p) {
-	    tempname = alloca(strlen(filename)+1);
-	    for (p=filename,idx=0; *p; ++idx, ++p)
-		tempname[idx] = (*p == '/' || *p == '\\') ? '_' : *p;
-	    tempname[idx] = 0;
-	    return openfile(tempname, defaultname, actualname);
-	}
-
-	if ((fd = open(filename, O_WRONLY|O_EXCL|O_CREAT, 0644)) >= 0) {
+	if ((fd = open(filename, openmode, 0644)) >= 0) {
 	    if (actualname) strcpy(actualname, filename);
 	    return fdopen(fd, "w");
 	}

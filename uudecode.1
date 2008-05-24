@@ -39,7 +39,7 @@
 .Nd decode a uuencoded file
 .Sh SYNOPSIS
 .Nm
-.Op Fl 7V
+.Op Fl 7cfV
 .Op Fl o Ar file
 .Op Ar file
 .Sh DESCRIPTION
@@ -51,13 +51,20 @@ uuencoded
 attempting to retain the mode (except for setuid bits) of
 the original file.
 If a file of the same name exists, the file will have a sequence
-number appended to it to avoid conflicts.
+number appended to it to avoid conflicts
+(see
+.Fl f
+for exceptions.)
 .Nm
 ignores any leading and trailing lines.
 .Ss Options
 .Bl -tag -width o-file-me -compact -offset indent
 .It Fl 7
 Force filenames to 7-bit USASCII.
+.It Fl c
+Write the decoded file into the current directory.
+.It Fl f
+Replace existing files.
 .It Fl o Ar file
 Write the decoded file to
 .Ar file ,

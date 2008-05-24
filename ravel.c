@@ -28,18 +28,18 @@ struct x_option uuencopts[] = {
 
 struct x_option ravelopts[] = {
     { '6', '6', "base64", 0, "encode all attachments in base64" },
-    { 's', 's', "subject", "SUBJECT", "Set the subject for this message" },
-    { 'm', 'm', "message-id", "MESSAGE-ID", "Use this message-id instead of\n"
-						 "a randomly generated one." },
     { 'b', 'b', "boundary", "BOUNDARY", "Set the boundary between parts of the mime\n"
 					     "message" },
-    { 't', 't', "mail-to", "ADDRESS", "Mail the output directly to address\n" },
     { 'f', 'f', "from",    "ADDRESS", "if -t, say the mail is from address\n" },
+    { 'h', 'h', "help", 0, "print this help message" },
+    { 'm', 'm', "message-id", "MESSAGE-ID", "Use this message-id instead of\n"
+						 "a randomly generated one." },
+    { 'o', 'o', "output", "FILE", "Write output to FILE" },
     { 'p', 'p', "preamble", "TEXT", "Use this text as the preamble to the message\n"
 				    "instead of the conventional `this is a MIME\n"
 				    "file...' one." },
-    { 'o', 'o', "output", "FILE", "Write output to FILE" },
-    { 'h', 'h', "help", 0, "print this help message" },
+    { 's', 's', "subject", "SUBJECT", "Set the subject for this message" },
+    { 't', 't', "mail-to", "ADDRESS", "Mail the output directly to address\n" },
     { 'v', 'v', "verbose", 0, "be somewhat chatty" },
     { 'V', 'V', "version", 0, "Show the current version, then exit" },
 } ;
@@ -56,8 +56,16 @@ int nropts;
 void
 die(int code)
 {
+#if HAVE_SETBUFFER
+    char buffer[1024];
+    setbuffer(stderr, buffer, sizeof buffer);
+#endif
     fprintf(stderr, "\nusage: %s [options] file [file...]\n\n", pgm);
     showopts(stderr, nropts, opts);
+#if HAVE_SETBUFFER
+    fflush(stderr);
+    setbuf(stderr, NULL);
+#endif
     exit (code);
 }
 

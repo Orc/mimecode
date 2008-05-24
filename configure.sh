@@ -43,10 +43,12 @@ fi
 AC_CHECK_HEADERS errno.h
 test "$OS_FREEBSD" || AC_CHECK_HEADERS malloc.h
 
+AC_CHECK_HEADERS libgen.h	# FreeBSD; contains prototype for basename()
+
 AC_CHECK_FIELD utsname domainname sys/utsname.h
 
+AC_CHECK_FUNCS setbuffer
 AC_CHECK_FUNCS basename
-AC_CHECK_HEADERS libgen.h	# FreeBSD; contains prototype for basename()
 
 VERSION=`cat VERSION`
 AC_SUB VERSION ${VERSION:-1.0}
