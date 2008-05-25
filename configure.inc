@@ -1,5 +1,5 @@
-#   @(#) configure.inc 1.33@(#)
-#   Copyright (c) 1999-2004 David Parsons. All rights reserved.
+#
+#   Copyright (c) 1999-2007 David Parsons. All rights reserved.
 #   
 #   Redistribution and use in source and binary forms, with or without
 #   modification, are permitted provided that the following conditions
@@ -34,6 +34,15 @@
 #
 ac_default_path="/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin:/usr/X11R6/bin"
 
+ac_standard="--src=DIR		where the source lives (.)
+--prefix=DIR		where to install the final product (/usr/local)
+--execdir=DIR		where to put executables (prefix/bin)
+--sbindir=DIR		where to put static executables (prefix/sbin)
+--confdir=DIR		where to put configuration information (/etc)
+--libdir=DIR		where to put libraries (prefix/lib)
+--libexecdir=DIR	where to put private executables
+--mandir=DIR		where to put manpages"
+
 __fail=exit
 
 if dirname B/A 2>/dev/null >/dev/null; then
@@ -47,7 +56,12 @@ __ac_dirname() {
 fi
 
 ac_progname=$0
-ac_configure_command="$*"
+ac_configure_command=
+Q=\'
+for x in "$@"; do
+    ac_configure_command="$ac_configure_command $Q$x$Q"
+done
+# ac_configure_command="$*"
 
 __d=`__ac_dirname "$ac_progname"`
 if [ "$__d" = "$ac_progname" ]; then
@@ -101,6 +115,17 @@ while [ $# -gt 0 ]; do
 	_set_confdir=1
 	shift 1;;
 
+    X--libexec|X--libexecdir)
+	AC_LIBEXEC=`__ac_dir "$2"`
+	_set_libexec=1
+	shift 2;;
+
+    X--libexec=*|X--libexecdir=*)
+	__d=`echo "$1" | sed -e 's/^[^=]*=//'`
+	AC_LIBEXEC=`__ac_dir "$__d"`
+	_set_libexec=1
+	shift 1;;
+
     X--lib|X--libdir)
 	AC_LIBDIR=`__ac_dir "$2"`
 	_set_libdir=1
@@ -121,6 +146,17 @@ while [ $# -gt 0 ]; do
 	__d=`echo "$1" | sed -e 's/^[^=]*=//'`
 	AC_EXECDIR=`__ac_dir "$__d"`
 	_set_execdir=1
+	shift 1;;
+
+    X--sbin|X--sbindir)
+	AC_SBINDIR=`__ac_dir "$2"`
+	_set_sbindir=1
+	shift 2;;
+
+    X--sbin=*|X--sbindir=*)
+	__d=`echo "$1" | sed -e 's/^[^=]*=//'`
+	AC_SBINDIR=`__ac_dir "$__d"`
+	_set_sbindir=1
 	shift 1;;
 
     X--man|X--mandir)
@@ -162,7 +198,7 @@ while [ $# -gt 0 ]; do
 	if [ "$_var" ]; then
 	    _val=`echo "$1" | sed -e 's/^--with-[^=]*=\(.*\)$/\1/'`
 	    _v=`echo $_var | tr '[a-z]' '[A-Z]' | tr '-' '_'`
-	    eval WITH_${_v}=$_val
+	    eval WITH_${_v}=\"$_val\"
 	else
 	    echo "Bad option $1.   Use --help to show options" 1>&2
 	    exit 1
@@ -181,13 +217,7 @@ while [ $# -gt 0 ]; do
 	shift 1 ;;
 
     X--help)
-	test -d ${AC_PREFIX:-/usr/local}/share/man && __sharedir=/share
-	echo "--src=DIR		where the source lives (.)
---prefix=DIR		where to install the final product (/usr/local)
---execdir=DIR		where to put executables (\$prefix/bin)
---libdir=DIR		where to put libraries (\$prefix/lib)
---mandir=DIR		where to put manpages (\$prefix$__sharedir/man)
---confdir=DIR		where to put configuration information (/etc)"
+	echo "$ac_standard"
 	test "$ac_help" && echo "$ac_help"
 	exit 0;;
 
@@ -252,11 +282,37 @@ AC_CONTINUE () {
     __fail="return"
 }
 
+
+#
+# generate a .o file from sources
+#
+__MAKEDOTO() {
+    AC_PROG_CC
+
+    if $AC_CC -c -o /tmp/doto$$.o "$@" $AC_LIBS 2>/tmp/doto$$.err; then
+	rm -f /tmp/doto$$.o /tmp/doto$$.err
+	TLOG " (found)"
+	return 0
+    fi
+    rm -f /tmp/doto$$.o
+    TLOG " (not found)"
+    echo "test failed:  command was $AC_CC -c -o /tmp/doto$$.o" "$@" $AC_LIBS
+    echo "output:"
+    cat /tmp/doto$$.err
+    rm -f /tmp/doto$$.err
+    echo "offending sources:"
+    for x in "$@"; do
+	echo "$x:"
+	cat $x
+    done
+    return 1
+}
+
+
 #
 # Emulate gnu autoconf's AC_CHECK_HEADERS() function
 #
 AC_CHECK_HEADERS () {
-    AC_PROG_CC
 
     echo "/* AC_CHECK_HEADERS */" > /tmp/ngc$$.c
     for hdr in $*; do
@@ -264,17 +320,15 @@ AC_CHECK_HEADERS () {
     done
     echo "main() { }" >> /tmp/ngc$$.c
 
-    LOGN "checking for header $hdr"
+    LOGN "looking for header $hdr"
 
-    if $AC_CC -o /tmp/ngc$$ /tmp/ngc$$.c; then
+    if __MAKEDOTO /tmp/ngc$$.c; then
 	AC_DEFINE 'HAVE_'`echo $hdr | tr 'a-z' 'A-Z' | tr './' '_'` 1
-	TLOG " (found)"
 	rc=0
     else
-	TLOG " (not found)"
 	rc=1
     fi
-    rm -f /tmp/ngc$$.c /tmp/ngc$$
+    rm -f /tmp/ngc$$.c
     return $rc
 }
 
@@ -285,17 +339,27 @@ AC_CHECK_HEADERS () {
 AC_CHECK_FUNCS () {
     AC_PROG_CC
 
+F=$1
+shift
+rm -f /tmp/ngc$$.c
+
+while [ "$1" ]; do
+    echo "#include <$1>" >> /tmp/ngc$$.c
+    shift
+done
+
     cat >> /tmp/ngc$$.c << EOF
 main()
 {
-    $1();
+
+    $F();
 }
 EOF
 
-    LOGN "checking for the $1 function"
+    LOGN "looking for the $F function"
 
     if $AC_CC -o /tmp/ngc$$ /tmp/ngc$$.c $LIBS; then
-	AC_DEFINE `echo ${2:-HAVE_$1} | tr 'a-z' 'A-Z'` 1
+	AC_DEFINE `echo ${2:-HAVE_$F} | tr 'a-z' 'A-Z'` 1
 	TLOG " (found)"
 	rc=0
     else
@@ -311,12 +375,81 @@ EOF
 
 
 #
+# check to see if some structure exists
+#
+# usage: AC_CHECK_STRUCT structure {include ...}
+#
+AC_CHECK_STRUCT () {
+    struct=$1
+    shift
+
+    rm -f /tmp/ngc$$.c
+
+    for include in $*; do
+	echo "#include <$include>" >> /tmp/ngc$$.c
+    done
+
+    cat >> /tmp/ngc$$.c << EOF
+main()
+{
+    struct $struct foo;
+}
+EOF
+
+    LOGN "looking for struct $struct"
+
+    if __MAKEDOTO /tmp/ngc$$.c; then
+	AC_DEFINE HAVE_STRUCT_`echo ${struct} | tr 'a-z' 'A-Z'`
+	rc=0
+    else
+	rc=1
+    fi
+    rm -f /tmp/ngc$$.c
+    return $rc
+}
+
+
+#
+# check to see if some type exists
+#
+# usage: AC_CHECK_TYPE type {include ...}
+#
+AC_CHECK_TYPE () {
+    type=$1
+    shift
+
+    rm -f /tmp/ngc$$.c
+
+    for include in $*; do
+	echo "#include <$include>" >> /tmp/ngc$$.c
+    done
+
+    cat >> /tmp/ngc$$.c << EOF
+main()
+{
+    $type foo;
+}
+EOF
+
+    LOGN "looking for $type type"
+
+    if __MAKEDOTO /tmp/ngc$$.c; then
+	AC_DEFINE HAVE_TYPE_`echo ${type} | tr 'a-z' 'A-Z'`
+	rc=0
+    else
+	rc=1
+    fi
+    rm -f /tmp/ngc$$.c
+    return $rc
+}
+
+
+#
 # check to see if some structure contains a field
 #
 # usage: AC_CHECK_FIELD structure field {include ...}
 #
 AC_CHECK_FIELD () {
-    AC_PROG_CC
 
     struct=$1
     field=$2
@@ -339,15 +472,13 @@ EOF
 
     LOGN "checking that struct $struct has a $field field"
 
-    if $AC_CC -o /tmp/ngc$$ /tmp/ngc$$.c $AC_LIBS 2>>config.log; then
+    if __MAKEDOTO /tmp/ngc$$.c; then
 	AC_DEFINE HAVE_`echo ${struct}_$field | tr 'a-z' 'A-Z'`
-	TLOG " (yes)"
 	rc=0
     else
-	TLOG " (no)"
 	rc=1
     fi
-    rm -f /tmp/ngc$$.c /tmp/ngc$$
+    rm -f /tmp/ngc$$.c
     return $rc
 }
 
@@ -394,7 +525,12 @@ EOF
 
     TLOGN " ($AC_CC)"
     if [ $status -eq 0 ]; then
-	TLOG " ok"
+	if $AC_CC -v 2>&1 | grep 'gcc version' >/dev/null; then
+	    TLOG " oh ick, it looks like gcc"
+	    IS_BROKEN_CC=T
+	else
+	    TLOG " ok"
+	fi
 
 	# check that the CFLAGS and LDFLAGS aren't bogus
 
@@ -541,24 +677,40 @@ AC_INIT () {
 
 EOF
 
+    unset __share
+    if [ -d $AC_PREFIX/share/man ]; then
+	for t in 1 2 3 4 5 6 7 8 9; do
+	    if [ -d $AC_PREFIX/share/man/man$t ]; then
+		__share=/share
+	    elif [ -d $AC_PREFIX/share/man/cat$t ]; then
+		__share=/share
+	    fi
+	done
+    else
+	__share=
+    fi
+
+    if [ -d $AC_PREFIX/libexec ]; then
+	__libexec=libexec
+    else
+	__libexec=lib
+    fi
+
+
     AC_PREFIX=${AC_PREFIX:-/usr/local}
     AC_EXECDIR=${AC_EXECDIR:-$AC_PREFIX/bin}
+    AC_SBINDIR=${AC_SBINDIR:-$AC_PREFIX/sbin}
     AC_LIBDIR=${AC_LIBDIR:-$AC_PREFIX/lib}
+    AC_MANDIR=${AC_MANDIR:-$AC_PREFIX$__share/man}
+    AC_LIBEXEC=${AC_LIBEXEC:-$AC_PREFIX/$__libexec}
     AC_CONFDIR=${AC_CONFDIR:-/etc}
-    if [ -z "$AC_MANDIR" ];then
-	if [ -d $AC_PREFIX/share/man ]; then
-	    AC_MANDIR=$AC_PREFIX/share/man
-	else
-	    AC_MANDIR=$AC_PREFIX/man
-	fi
-    fi
 
     AC_PATH=${WITH_PATH:-$PATH}
     AC_PROG_CPP
     AC_PROG_INSTALL
 
     ac_os=`uname -s`
-    _os=`echo $ac_os | tr '[a-z]' '[A-Z]'`
+    _os=`echo $ac_os | tr '[a-z]' '[A-Z]' | sed -e 's/[^A-Z0-9_].*$//'`
     AC_DEFINE OS_$_os	1
     eval OS_${_os}=1
     unset _os
@@ -574,15 +726,25 @@ AC_LIBRARY() {
     SRC=$1
     shift
 
+    __acllibs=
+    __aclhdrs=
+
+    for x in "$@"; do
+	case X"$x" in
+	X-l*) __acllibs="$__acllibs $x" ;;
+	*)    __aclhdrs="$__aclhdrs $x" ;;
+	esac
+    done
+
     # first see if the function can be found in any of the
     # current libraries
-    AC_QUIET AC_CHECK_FUNCS $SRC && return 0
+    AC_QUIET AC_CHECK_FUNCS $SRC $__aclhdrs && return 0
 
     # then search through the list of libraries
     __libs="$LIBS"
-    for x in $*; do
+    for x in $__acllibs; do
 	LIBS="$__libs $x"
-	if AC_QUIET AC_CHECK_FUNCS $SRC; then
+	if AC_QUIET AC_CHECK_FUNCS $SRC $__aclhdrs; then
 	    AC_LIBS="$AC_LIBS $x"
 	    return 0
 	fi
@@ -662,6 +824,24 @@ AC_PROG_YACC () {
 
 
 #
+# AC_PROG looks for a program
+#
+AC_PROG () {
+    PN=`basename $1 | tr '[a-z]' '[A-Z]' | tr -dc '[A-Z]'`
+    TLOGN "looking for $1"
+    DEST=`acLookFor $1`
+    if [ "$DEST" ]; then
+	AC_SUB $PN $DEST
+	TLOG " ($DEST)"
+	return 0
+    fi
+    AC_SUN $PN true
+    TLOG " (not found)"
+    return 1
+}
+
+
+#
 # AC_PROG_LN_S checks to see if ln exists, and, if so, if ln -s works
 #
 AC_PROG_LN_S () {
@@ -712,6 +892,21 @@ AC_PROG_FIND () {
 
 
 #
+# AC_PROG_AWK looks for the awk program and sets the AWK environment
+# variable
+#
+AC_PROG_AWK () {
+    if test -z "$AC_AWK_PROG"; then
+	MF_PATH_INCLUDE AWK awk
+	rc=$?
+	AC_AWK_PROG=$DEST
+	return $rc
+    fi
+    return 0
+}
+
+
+#
 # AC_PROG_SED looks for the sed program and sets the SED environment
 # variable
 #
@@ -737,23 +932,9 @@ AC_HEADER_SYS_WAIT () {
 # AC_TYPE_PID_T checks to see if the pid_t type exists
 #
 AC_TYPE_PID_T () {
-    cat > /tmp/pd$$.c << EOF
-#include <sys/types.h>
-main() { pid_t me; }
-EOF
 
-    LOGN "checking for pid_t"
-
-    if $AC_CC -c /tmp/pd$$.c -o /tmp/pd$$.o; then
-	TLOG " (found)"
-	rc=0
-    else
-	echo "typedef int pid_t;" >> $__cwd/config.h
-	TLOG " (not found)"
-	rc=1
-    fi
-    rm -f /tmp/pd$$.o /tmp/pd$$.c
-    return $rc
+    AC_CHECK_TYPE pid_t sys/types.h
+    return $?
 }
 
 
@@ -766,15 +947,33 @@ const char me=1;
 EOF
     LOGN "checking for \"const\" keyword"
 
-    if $AC_CC -c /tmp/pd$$.c -o /tmp/pd$$.o; then
-	TLOG " (yes)"
+    if __MAKEDOTO /tmp/pd$$.c; then
 	rc=0
     else
 	AC_DEFINE 'const' '/**/'
-	TLOG " (no)"
 	rc=1
     fi
-    rm -f /tmp/pd$$.o /tmp/pd$$.c
+    rm -f /tmp/pd$$.c
+    return $rc
+}
+
+
+#
+# AC_C_VOLATILE checks to see if the compiler supports the volatile keyword
+#
+AC_C_VOLATILE () {
+    cat > /tmp/pd$$.c << EOF
+f() { volatile char me=1; }
+EOF
+    LOGN "checking for \"volatile\" keyword"
+
+    if __MAKEDOTO /tmp/pd$$.c; then
+	rc=0
+    else
+	AC_DEFINE 'volatile' '/**/'
+	rc=1
+    fi
+    rm -f /tmp/pd$$.c
     return $rc
 }
 
@@ -836,7 +1035,9 @@ AC_OUTPUT () {
     AC_SUB 'srcdir'  "$AC_SRCDIR"
     AC_SUB 'prefix'  "$AC_PREFIX"
     AC_SUB 'exedir'  "$AC_EXECDIR"
+    AC_SUB 'sbindir' "$AC_SBINDIR"
     AC_SUB 'libdir'  "$AC_LIBDIR"
+    AC_SUB 'libexec' "$AC_LIBEXEC"
     AC_SUB 'confdir' "$AC_CONFDIR"
     AC_SUB 'mandir'  "$AC_MANDIR"
 
@@ -873,6 +1074,174 @@ EOF
     fi
 }
 
+#
+# AC_CHECK_FLOCK checks to see if flock() exists and if the LOCK_NB argument
+# works properly.
+#
+AC_CHECK_FLOCK() {
+
+    AC_CHECK_HEADERS sys/types.h sys/file.h fcntl.h
+
+    cat << EOF > $$.c
+#include <stdio.h>
+#include <sys/file.h>
+#include <sys/types.h>
+#include <fcntl.h>
+
+main()
+{
+    int x = open("$$.c", O_RDWR, 0666);
+    int y = open("$$.c", O_RDWR, 0666);
+
+    if (flock(x, LOCK_EX) != 0)
+	exit(1);
+    if (flock(y, LOCK_EX|LOCK_NB) == 0)
+	exit(1);
+    exit(0);
+}
+EOF
+
+    LOGN "checking flock() sanity"
+    HAS_FLOCK=0
+    if $AC_CC -o flock $$.c ; then
+	if ./flock ; then
+	    LOG " (good)"
+	    HAS_FLOCK=1
+	    AC_DEFINE HAS_FLOCK
+	else
+	    LOG " (bad)"
+	fi
+    else
+	LOG " (not found)"
+    fi
+
+    rm -f flock $$.c
+
+    case "$HAS_FLOCK" in
+    0) return 1 ;;
+    *) return 0 ;;
+    esac
+}
+
+
+#
+# AC_CHECK_RESOLVER finds out whether the berkeley resolver is
+# present on this system.
+#
+AC_CHECK_RESOLVER () {
+    AC_PROG_CC
+
+    TLOGN "looking for the Berkeley resolver library"
+
+    __ACR_rc=0
+
+    cat > /tmp/ngc$$.c << EOF
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <arpa/nameser.h>
+#include <resolv.h>
+
+main()
+{
+    char bfr[256];
+
+    res_init();
+    res_query("hello", C_IN, T_A, bfr, sizeof bfr);
+}
+EOF
+
+    if $AC_CC -o /tmp/ngc$$ /tmp/ngc$$.c; then
+	TLOG " (found)"
+    elif $AC_CC -o /tmp/ngc$$ /tmp/ngc$$.c -lresolv; then
+	TLOG " (found, needs -lresolv)"
+	AC_LIBS="$AC_LIBS -lresolv"
+    elif $AC_CC -DBIND_8_COMPAT -o /tmp/ngc$$ /tmp/ngc$$.c; then
+	TLOG " (found, needs BIND_8_COMPAT)"
+	AC_DEFINE BIND_8_COMPAT 1
+    elif $AC_CC -DBIND_8_COMPAT -o /tmp/ngc$$ /tmp/ngc$$.c -lresolv; then
+	TLOG " (found, needs BIND_8_COMPAT & -lresolv)"
+	AC_DEFINE BIND_8_COMPAT 1
+    else
+	TLOG " (not found)"
+	__ACR_rc=1
+    fi
+    rm -f /tmp/ngc$$.c
+    return $__ACR_rc
+}
+
+
+#
+# AC_CHECK_ALLOCA looks for alloca
+#
+AC_CHECK_ALLOCA () {
+
+    AC_PROG_CC
+    AC_CHECK_HEADERS stdlib.h
+
+    cat - > /tmp/ngc$$.c << EOF
+#if T
+# include <alloca.h>
+#else
+# include <stdlib.h>
+#endif
+main()
+{
+	alloca(10);
+}
+EOF
+
+    LOGN "looking for the alloca function"
+    if $AC_CC -DT /tmp/ngc$$.c -o /tmp/ngc$$; then
+	AC_DEFINE 'HAVE_ALLOCA_H' 1
+	status=0
+	TLOG " (found in alloca.h)"
+    elif $AC_CC /tmp/ngc$$.c -o /tmp/ngc$$; then
+	TLOG " (found)"
+	status=0
+    else
+	TLOG " (not found)"
+	status=1
+    fi
+    rm -f /tmp/ngc$$.c /tmp/ngc
+    return $status
+
+}
+
+
+#
+# AC_CHECK_BASENAME looks for a copy of basename that does NOT use
+# a local static buffer to hold results in.
+#
+AC_CHECK_BASENAME() {
+    TLOGN "looking for a reentrant basename "
+
+    cat > /tmp/ngc$$.c << EOF
+#include <string.h>
+
+main()
+{
+    char *a = basename("/a/test");
+    char *b = basename("/a/nother");
+
+    return (strcmp(a,b) != 0) ? 0 : 1;
+
+}
+EOF
+
+    if $AC_CC -o /tmp/ngc$$ /tmp/ngc$$.c $LIBS; then
+	if /tmp/ngc$$; then
+	    TLOG "(found)"
+	    AC_DEFINE 'HAVE_BASENAME' 1
+	    AC_CHECK_HEADERS libgen.h
+	else
+	    TLOG "(broken)"
+	fi
+    else
+	TLOG "(not found)"
+    fi
+    rm -f /tmp/ngc$$ /tmp/ngc$$.c
+}
+
 
 #
 # AC_PROG_INSTALL finds the install program and guesses whether it's a 
@@ -882,7 +1251,7 @@ AC_PROG_INSTALL () {
 
     DEST=`acLookFor install`
 
-    LOGN "checking for install"
+    LOGN "looking for install"
     unset IS_BSD
     if [ "$DEST" ]; then
 	# BSD install or GNU install?  Let's find out...
@@ -1040,6 +1409,12 @@ AC_MAK() {
 # AC_DEFINE adds a #define to config.h
 AC_DEFINE() {
     echo "#define $1 ${2:-1}" >> $__cwd/config.h
+}
+
+#
+# AC_INCLUDE adds a #include to config.h
+AC_INCLUDE() {
+    echo "#include \"$1\"" >> $__cwd/config.h
 }
 
 #

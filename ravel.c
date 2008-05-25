@@ -14,6 +14,9 @@
 
 #include <sys/utsname.h>
 #include <time.h>
+#if HAVE_LIBGEN_H
+#   include <libgen.h>
+#endif
 
 #include <paths.h>
 
@@ -119,6 +122,7 @@ douuencode(context *io, int base64please, int argc, char **argv)
 }
 
 
+float
 main(int argc, char **argv)
 {
     int ix;
@@ -234,7 +238,8 @@ main(int argc, char **argv)
 
 	time(&now);
 	uname(&sys);
-	sprintf(template, "%u.%u/%u/%s.", getuid(), getgid(), now, sys.nodename);
+	sprintf(template, "%u.%u/%lu/%s.", getuid(), getgid(),
+					   (unsigned long)(now), sys.nodename);
 #if HAS_DOMAINNAME
 	if (strlen(sys.domainname) > 0 && strcmp(sys.domainname, "(none)") != 0)
 	    strcat(template, sys.domainname);

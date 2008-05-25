@@ -68,9 +68,9 @@ encode(mimeread read, mimewrite write, void *ctx)
 	for (p = buf; n > 0; n -= 3, p += 3) {
 	    ch = *p >> 2;
 	    Write(ctx, ENC(ch));
-	    ch = (*p << 4) & 060 | (p[1] >> 4) & 017;
+	    ch = ((*p << 4) & 060) | ((p[1] >> 4) & 017);
 	    Write(ctx, ENC(ch));
-	    ch = (p[1] << 2) & 074 | (p[2] >> 6) & 03;
+	    ch = ((p[1] << 2) & 074) | ((p[2] >> 6) & 03);
 	    Write(ctx, ENC(ch));
 	    ch = p[2] & 077;
 	    Write(ctx, ENC(ch));
@@ -79,6 +79,7 @@ encode(mimeread read, mimewrite write, void *ctx)
     }
     Write(ctx, ENC('\0'));
     Write(ctx, '\n');
+    return 0;
 }
 
 
@@ -91,7 +92,6 @@ decode(mimeread read, mimewrite write, void *ctx)
     register char ch, *p;
     char text[512];
     int size;
-    int count = 0;
 
     while ( (size = (*read)(ctx, text, sizeof text)) > 0 ) {
 

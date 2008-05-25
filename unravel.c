@@ -16,6 +16,8 @@
 
 #include <string.h>
 #include <basis/options.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 extern int overwrite;
 FILE* openfile(char*, char*, char*);
@@ -104,7 +106,7 @@ xfgetline(char *bfr, int len, FILE *fd)
     char *ret;
     int size;
 
-    if (ret = fgets(bfr, len, fd)) {
+    if (( ret = fgets(bfr, len, fd) )) {
 	size = strlen(bfr);
 	if (size > 0 && bfr[size-1] == '\n') {
 	    --size;
@@ -156,7 +158,7 @@ checkbound(char* line)
 	return 0;
 
     if (strncmp(line+2, stack[sp].mark, stack[sp].size) == 0) {
-	register sz = stack[sp].size;
+	register int sz = stack[sp].size;
 	
 	/* check for --boundary--, which mean the end of this level.
 	 */
@@ -190,9 +192,8 @@ get_header(char* bfr, int bfrlen, FILE* input)
 {
     char* current;
     int sizeleft;
-    register c;
+    register int c;
     char* p;
-    int checkedforsep=0;
 
     current = bfr;
     sizeleft = bfrlen;
@@ -222,8 +223,6 @@ get_header(char* bfr, int bfrlen, FILE* input)
 static int
 read_headers(FILE* input, struct interesting_headers* info)
 {
-    int rc;
-    register c;
     long pos;
     int gotheaders=0;
     char *p;
@@ -246,13 +245,13 @@ read_headers(FILE* input, struct interesting_headers* info)
 	if (checkbound(line))
 	    return 0;
 
-	if (p = Cstrdup(line, "Mime-version:"))
+	if (( p = Cstrdup(line, "Mime-version:") ))
 	    info->mime_version = p;
-	else if (p = Cstrdup(line, "Content-Type:"))
+	else if (( p = Cstrdup(line, "Content-Type:") ))
 	    info->content_type = p;
-	else if (p = Cstrdup(line, "Content-Transfer-Encoding:"))
+	else if (( p = Cstrdup(line, "Content-Transfer-Encoding:") ))
 	    info->content_transfer_encoding = p;
-	else if (p = Cstrdup(line, "Content-Disposition:"))
+	else if (( p = Cstrdup(line, "Content-Disposition:") ))
 	    info->content_disposition = p;
     }
     if (gotheaders)
@@ -344,8 +343,7 @@ writechar(context *io, char ch)
 {
     if (ch == '\n')
 	io->linecount++;
-    if (io->output)
-	return io->output ? fputc(ch,io->output) : 1;
+    return io->output ? fputc(ch,io->output) : 1;
 }
 
 
@@ -458,7 +456,6 @@ fixfilename(char *path)
 void
 uud(FILE *input)
 {
-    context io;
     char line[1024];
     char *p, *fi, *filename;
     unsigned int mode = 0644;
@@ -482,7 +479,7 @@ uud(FILE *input)
 	    while (isspace(*p)) ++p;
 	    if (*p == '"') {
 		filename = ++p;
-		if (p = strchr(p, '"'))
+		if (( p = strchr(p, '"') ))
 		    *p = 0;
 		else  error("badly formed uuencode ``begin'' line");
 	    }
@@ -637,6 +634,7 @@ die(int exitcode, int nropts, struct x_option *opts)
     exit(exitcode);
 }
 
+void
 main(int argc, char **argv)
 {
     int opt, uudecode = 0;
