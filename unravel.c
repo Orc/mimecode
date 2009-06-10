@@ -58,6 +58,7 @@ static int nrbound = 0;
 static int sp = 0;
 
 static int verbose = 0;		/* spit out needed debugging */
+static int traceonly = 0;	/* describe the message, but don't save */
 static int save_them_all = 0;	/* write all valid fragments */
 static int sevenbit = 0;	/* force filenames to usascii */
 static int clip = 0;		/* strip paths off output filenames */
@@ -350,13 +351,15 @@ writechar(context *io, char ch)
 static void
 namefile(context *io, char *wanted, char *actual)
 {
-    if (wanted)
+    if (wanted && !traceonly)
 	fprintf(stderr, "%s ", wanted);
 
     if (io->output && actual && (wanted == 0 || strcmp(wanted, actual) != 0) ) {
-	if (wanted)
-	    fprintf(stderr, "-> ");
-	fprintf(stderr,"%s ", actual);
+	if ( !traceonly ) {
+	    if (wanted)
+		fprintf(stderr, "-> ");
+	    fprintf(stderr,"%s ", actual);
+	}
     }
 }
 
@@ -374,7 +377,7 @@ read_section(FILE* input, Encoder *code, char* filename, int mode)
     actualname[0] = 0;
 
     io.input = input;
-    io.output = openfile(filename, prefix, actualname);
+    io.output = traceonly ? 0 : openfile(filename, prefix, actualname);
 
     namefile(&io,filename,actualname);
 
@@ -487,6 +490,13 @@ uud(FILE *input)
 
 	    if (*filename == 0) error("badly formed uuencode ``begin'' line");
 
+	    if ( traceonly ) {
+		printf("%*suuencoded", sp, "");
+		if ( outputfile )
+		    printf("; \"%s\"", outputfile);
+		putchar('\n');
+	    }
+
 	    read_section(input, code, outputfile ? outputfile
 						 : fixfilename(filename), mode);
 	}
@@ -562,6 +572,9 @@ read_mime(FILE* input)
 	     */
 
 
+	    if ( traceonly )
+		printf("%*s%s\n", sp, "", headers.content_type);
+		
 	    if (boundary) {
 		int level;
 
@@ -591,6 +604,13 @@ read_mime(FILE* input)
 	return;
     }
 
+    if ( traceonly ) {
+	printf("%*s%s", sp, "", headers.content_type);
+	if ( filename )
+	    printf("; \"%s\"", filename);
+	putchar('\n');
+    }
+
     return (filename||save_them_all) ? read_section(input, ofn, filename, 0)
 				     : eat_section(input);
 } /* read_mime */
@@ -603,6 +623,7 @@ struct x_option ropts[] = {
     { 'f', 'f', "overwrite",0, "Overwrite existing files" },
     { 'h', 'h', "help",     0, "Show this message" },
     { 'p', 'p', "prefix","PFX","set document prefix to PFX" },
+    { 't', 't', "traceonly",0, "show the document types, but don't save" },
     { 'v', 'v', "verbose",  0, "Display progress messages" },
     { 'V', 'V', "version",  0, "Show the version number, then exit" }
 };
@@ -679,6 +700,10 @@ main(int argc, char **argv)
 		break;
 	case 'o':
 		outputfile = x_optarg;
+		break;
+	case 't':
+		save_them_all++;
+		traceonly++;
 		break;
 	case 'p':
 		prefix = x_optarg;
