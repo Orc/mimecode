@@ -344,6 +344,7 @@ writechar(context *io, char ch)
 {
     if (ch == '\n')
 	io->linecount++;
+    io->charcount++;
     return io->output ? fputc(ch,io->output) : 1;
 }
 
@@ -391,6 +392,10 @@ read_section(FILE* input, Encoder *code, char* filename, int mode)
 	fclose(io.output);
 	fprintf(stderr, "[%d line%s]\n", io.linecount, (io.linecount==1)?"":"s");
     }
+    else if ( traceonly )
+	printf("; %d line%s, %d char%s\n",
+		 io.linecount, (io.linecount==1)?"":"s",
+		 io.charcount, (io.charcount==1)?"":"s");
 } /* read_section */
 
 
@@ -494,7 +499,7 @@ uud(FILE *input)
 		printf("%*suuencoded", sp, "");
 		if ( outputfile )
 		    printf("; \"%s\"", outputfile);
-		putchar('\n');
+		/*putchar('\n');*/
 	    }
 
 	    read_section(input, code, outputfile ? outputfile
@@ -608,7 +613,7 @@ read_mime(FILE* input)
 	printf("%*s%s", sp, "", headers.content_type);
 	if ( filename )
 	    printf("; \"%s\"", filename);
-	putchar('\n');
+	/*putchar('\n');*/
     }
 
     return (filename||save_them_all) ? read_section(input, ofn, filename, 0)

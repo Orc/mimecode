@@ -16,6 +16,7 @@ typedef struct {
     FILE *input;
     FILE *output;
     int linecount;
+    int charcount;
 } context;
 
 typedef struct mime_encoding {
