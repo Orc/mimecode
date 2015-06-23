@@ -7,7 +7,7 @@ To: orc
 
 This is a MIME-encoded message.  Decode it with `unravel' or
 any other MIME-unpacking software.  Unravel is available at
-http://www.pell.chi.il.us/~orc/Code/Mastodon/bin/mimecode/
+http://www.pell.portland.or.us/~orc/Code/Mastodon/bin/mimecode/
 --Hello, Sailor
 Content-Disposition: inline; filename="2340-4.00readme"
 Content-type: text/plain; name="2340-4.00readme"
@@ -211,11 +211,11 @@ cate */
   * Video handling moved to video.S by Martin Mares, March 1996
   * <mj@k332.feld.cvut.cz>
   *
-+ * Extended memory detection made more paranoid by orc@pell.chi.il.us =
++ * Extended memory detection made more paranoid by orc@pell.portland.or.us =
 (david
 + * parsons) and Nathan Zook (nathan.zook@amd.com), December 1999.
 + *
-  * Extended memory detection scheme retwiddled by orc@pell.chi.il.us (=
+  * Extended memory detection scheme retwiddled by orc@pell.portland.or.us (=
 david
   * parsons) to avoid loadlin confusion, July 1997
   *

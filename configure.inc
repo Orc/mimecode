@@ -491,9 +491,10 @@ AC_PROG_CC () {
 
     cat > /tmp/ngc$$.c << \EOF
 #include <stdio.h>
-main()
+int main()
 {
     puts("hello, sailor");
+    exit(0);
 }
 EOF
 

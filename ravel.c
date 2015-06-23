@@ -278,7 +278,7 @@ main(int argc, char **argv)
 	fprintf(io.output,
 	       "This is a MIME-encoded message.  Decode it with `unravel' or\n"
 	       "any other MIME-unpacking software.  Unravel is available at\n"
-	       "http://www.pell.chi.il.us/~orc/Code/mimecode\n");
+	       "http://www.pell.portland.or.us/~orc/Code/mimecode\n");
 
     for (ix = x_optind; ix < argc; ix++) {
 	if (verbose)

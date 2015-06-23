@@ -141,7 +141,11 @@ b64gets(context *ctx, char *line, int size)
 main(argc, argv)
 char **argv;
 {
+    static char inbuf[10240];
+    
     context context = { stdin, stdout };
+
+    setbuffer(stdin, inbuf, sizeof inbuf);
 
 
     if ( (argc > 1) && (strcasecmp(argv[1], "encode") == 0) )
