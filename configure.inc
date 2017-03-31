@@ -360,6 +360,7 @@ AC_PROG_CC () {
 int main()
 {
     puts("hello, sailor");
+    exit(0);
 }
 EOF
 
