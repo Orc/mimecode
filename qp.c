@@ -35,6 +35,7 @@ QPenc[] = {
 static int
 encode( mimeread read, mimewrite write, void *context)
 {
+    char *q;
     char block[512];
     static char xchar[]	= "0123456789ABCDEF";
     int size;
@@ -42,7 +43,8 @@ encode( mimeread read, mimewrite write, void *context)
 			 * we can't let lines get longer than 76
 			 * characters
 			 */
-    register int c, i;
+    unsigned char *p;
+    register c, i;
 
     while ( ( size = (*read)(context, block, sizeof block) ) > 0 ) {
 	for (i = 0; i < size; i++) {
@@ -108,10 +110,12 @@ encode( mimeread read, mimewrite write, void *context)
 static int
 decode( mimeread read, mimewrite write, void *context)
 {
-    register int c, i, size;
+    register c;
     char bfr[3];
+    int lastwascr=0;
     char line[512];
     int val;
+    register i, size;
 
     while ( (size = read(context,line,sizeof line)) > 0) {
 	for (i=0; i < size; i++) {

@@ -20,7 +20,9 @@ openfile(char* filename, char *defaultname, char *actualname)
     char* tempname;
     unsigned int seq = 0;
     int fd;
+    int idx;
     int openmode = overwrite ? O_WRONLY|O_CREAT : O_WRONLY|O_EXCL|O_CREAT;
+    char *p;
     char *append;
 
     if (filename) {

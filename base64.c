@@ -76,12 +76,12 @@ encode( mimeread read, mimewrite write, void *context )
 static int
 decode( mimeread read, mimewrite write, void *context)
 {
-    unsigned char line[512];
-    register unsigned char *code;
-    register int size;
+    char line[512];
+    register char *code;
+    register size, i;
     unsigned char c[4];
 
-    while ( (size = (*read)(context, (void*)line, sizeof line)) > 0 ) {
+    while ( (size = (*read)(context, line, sizeof line)) > 0 ) {
 	code = line;
 
 	while ( (size >= 4) && (code[0] != '=') ) {

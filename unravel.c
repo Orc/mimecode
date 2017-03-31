@@ -16,8 +16,6 @@
 
 #include <string.h>
 #include <basis/options.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 
 extern int overwrite;
 FILE* openfile(char*, char*, char*);
@@ -58,7 +56,6 @@ static int nrbound = 0;
 static int sp = 0;
 
 static int verbose = 0;		/* spit out needed debugging */
-static int traceonly = 0;	/* describe the message, but don't save */
 static int save_them_all = 0;	/* write all valid fragments */
 static int sevenbit = 0;	/* force filenames to usascii */
 static int clip = 0;		/* strip paths off output filenames */
@@ -107,7 +104,7 @@ xfgetline(char *bfr, int len, FILE *fd)
     char *ret;
     int size;
 
-    if (( ret = fgets(bfr, len, fd) )) {
+    if (ret = fgets(bfr, len, fd)) {
 	size = strlen(bfr);
 	if (size > 0 && bfr[size-1] == '\n') {
 	    --size;
@@ -159,7 +156,7 @@ checkbound(char* line)
 	return 0;
 
     if (strncmp(line+2, stack[sp].mark, stack[sp].size) == 0) {
-	register int sz = stack[sp].size;
+	register sz = stack[sp].size;
 	
 	/* check for --boundary--, which mean the end of this level.
 	 */
@@ -193,8 +190,9 @@ get_header(char* bfr, int bfrlen, FILE* input)
 {
     char* current;
     int sizeleft;
-    register int c;
+    register c;
     char* p;
+    int checkedforsep=0;
 
     current = bfr;
     sizeleft = bfrlen;
@@ -224,6 +222,8 @@ get_header(char* bfr, int bfrlen, FILE* input)
 static int
 read_headers(FILE* input, struct interesting_headers* info)
 {
+    int rc;
+    register c;
     long pos;
     int gotheaders=0;
     char *p;
@@ -246,13 +246,13 @@ read_headers(FILE* input, struct interesting_headers* info)
 	if (checkbound(line))
 	    return 0;
 
-	if (( p = Cstrdup(line, "Mime-version:") ))
+	if (p = Cstrdup(line, "Mime-version:"))
 	    info->mime_version = p;
-	else if (( p = Cstrdup(line, "Content-Type:") ))
+	else if (p = Cstrdup(line, "Content-Type:"))
 	    info->content_type = p;
-	else if (( p = Cstrdup(line, "Content-Transfer-Encoding:") ))
+	else if (p = Cstrdup(line, "Content-Transfer-Encoding:"))
 	    info->content_transfer_encoding = p;
-	else if (( p = Cstrdup(line, "Content-Disposition:") ))
+	else if (p = Cstrdup(line, "Content-Disposition:"))
 	    info->content_disposition = p;
     }
     if (gotheaders)
@@ -344,23 +344,21 @@ writechar(context *io, char ch)
 {
     if (ch == '\n')
 	io->linecount++;
-    io->charcount++;
-    return io->output ? fputc(ch,io->output) : 1;
+    if (io->output)
+	return io->output ? fputc(ch,io->output) : 1;
 }
 
 
 static void
 namefile(context *io, char *wanted, char *actual)
 {
-    if (wanted && !traceonly)
+    if (wanted)
 	fprintf(stderr, "%s ", wanted);
 
     if (io->output && actual && (wanted == 0 || strcmp(wanted, actual) != 0) ) {
-	if ( !traceonly ) {
-	    if (wanted)
-		fprintf(stderr, "-> ");
-	    fprintf(stderr,"%s ", actual);
-	}
+	if (wanted)
+	    fprintf(stderr, "-> ");
+	fprintf(stderr,"%s ", actual);
     }
 }
 
@@ -378,7 +376,7 @@ read_section(FILE* input, Encoder *code, char* filename, int mode)
     actualname[0] = 0;
 
     io.input = input;
-    io.output = traceonly ? 0 : openfile(filename, prefix, actualname);
+    io.output = openfile(filename, prefix, actualname);
 
     namefile(&io,filename,actualname);
 
@@ -392,10 +390,6 @@ read_section(FILE* input, Encoder *code, char* filename, int mode)
 	fclose(io.output);
 	fprintf(stderr, "[%d line%s]\n", io.linecount, (io.linecount==1)?"":"s");
     }
-    else if ( traceonly )
-	printf("; %d line%s, %d char%s\n",
-		 io.linecount, (io.linecount==1)?"":"s",
-		 io.charcount, (io.charcount==1)?"":"s");
 } /* read_section */
 
 
@@ -464,6 +458,7 @@ fixfilename(char *path)
 void
 uud(FILE *input)
 {
+    context io;
     char line[1024];
     char *p, *fi, *filename;
     unsigned int mode = 0644;
@@ -487,20 +482,13 @@ uud(FILE *input)
 	    while (isspace(*p)) ++p;
 	    if (*p == '"') {
 		filename = ++p;
-		if (( p = strchr(p, '"') ))
+		if (p = strchr(p, '"'))
 		    *p = 0;
 		else  error("badly formed uuencode ``begin'' line");
 	    }
 	    else filename = p;
 
 	    if (*filename == 0) error("badly formed uuencode ``begin'' line");
-
-	    if ( traceonly ) {
-		printf("%*suuencoded", sp, "");
-		if ( outputfile )
-		    printf("; \"%s\"", outputfile);
-		/*putchar('\n');*/
-	    }
 
 	    read_section(input, code, outputfile ? outputfile
 						 : fixfilename(filename), mode);
@@ -577,9 +565,6 @@ read_mime(FILE* input)
 	     */
 
 
-	    if ( traceonly )
-		printf("%*s%s\n", sp, "", headers.content_type);
-		
 	    if (boundary) {
 		int level;
 
@@ -609,13 +594,6 @@ read_mime(FILE* input)
 	return;
     }
 
-    if ( traceonly ) {
-	printf("%*s%s", sp, "", headers.content_type);
-	if ( filename )
-	    printf("; \"%s\"", filename);
-	/*putchar('\n');*/
-    }
-
     return (filename||save_them_all) ? read_section(input, ofn, filename, 0)
 				     : eat_section(input);
 } /* read_mime */
@@ -628,7 +606,6 @@ struct x_option ropts[] = {
     { 'f', 'f', "overwrite",0, "Overwrite existing files" },
     { 'h', 'h', "help",     0, "Show this message" },
     { 'p', 'p', "prefix","PFX","set document prefix to PFX" },
-    { 't', 't', "traceonly",0, "show the document types, but don't save" },
     { 'v', 'v', "verbose",  0, "Display progress messages" },
     { 'V', 'V', "version",  0, "Show the version number, then exit" }
 };
@@ -660,7 +637,6 @@ die(int exitcode, int nropts, struct x_option *opts)
     exit(exitcode);
 }
 
-void
 main(int argc, char **argv)
 {
     int opt, uudecode = 0;
@@ -705,10 +681,6 @@ main(int argc, char **argv)
 		break;
 	case 'o':
 		outputfile = x_optarg;
-		break;
-	case 't':
-		save_them_all++;
-		traceonly++;
 		break;
 	case 'p':
 		prefix = x_optarg;
