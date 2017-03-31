@@ -21,7 +21,7 @@
 .Op Fl t Ar recipient
 .Ar file(s)
 .Nm unravel
-.Op Fl 7acfhtvV
+.Op Fl 7cfhvaV
 .Op Fl p Ar prefix
 .Op Ar file
 .Sh DESCRIPTION
@@ -118,11 +118,6 @@ Replace existing files.
 .It Fl h
 Print a help message describing what command-line options are available,
 then exit.
-.It Fl t
-Instead of unravelling the document, display a tree showing
-mime information (content-type(s), the output filename if
-it was given, and the number of lines and characters that would
-be written) about it.
 .It Fl v
 Print debugging and progress messages.
 .It Fl V
@@ -136,4 +131,4 @@ Write unnamed attachments to
 .Xr uuencode 1 ,
 .Xr uuencode 5 .
 .Sh AUTHOR
-David Parsons (orc@pell.chi.il.us)
+David Parsons (orc@pell.portland.or.us)
