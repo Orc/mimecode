@@ -14,11 +14,12 @@
 
 #include <sys/utsname.h>
 #include <time.h>
-#if HAVE_LIBGEN_H
-#   include <libgen.h>
-#endif
 
 #include <paths.h>
+
+#ifdef HAVE_LIBGEN_H
+#include <libgen.h>
+#endif
 
 extern Encoder base64, uuencode, quoted_printable;
 
@@ -122,7 +123,6 @@ douuencode(context *io, int base64please, int argc, char **argv)
 }
 
 
-float
 main(int argc, char **argv)
 {
     int ix;
@@ -238,8 +238,7 @@ main(int argc, char **argv)
 
 	time(&now);
 	uname(&sys);
-	sprintf(template, "%u.%u/%lu/%s.", getuid(), getgid(),
-					   (unsigned long)(now), sys.nodename);
+	sprintf(template, "%u.%u/%u/%s.", getuid(), getgid(), now, sys.nodename);
 #if HAS_DOMAINNAME
 	if (strlen(sys.domainname) > 0 && strcmp(sys.domainname, "(none)") != 0)
 	    strcat(template, sys.domainname);
@@ -278,7 +277,7 @@ main(int argc, char **argv)
 	fprintf(io.output,
 	       "This is a MIME-encoded message.  Decode it with `unravel' or\n"
 	       "any other MIME-unpacking software.  Unravel is available at\n"
-	       "http://www.pell.chi.il.us/~orc/Code/mimecode\n");
+	       "http://www.pell.portland.or.us/~orc/Code/mimecode\n");
 
     for (ix = x_optind; ix < argc; ix++) {
 	if (verbose)
