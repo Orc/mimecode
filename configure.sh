@@ -10,6 +10,11 @@ LOCAL_AC_OPTIONS='case "$1" in
 
 AC_INIT mimecode
 
+case "$AC_CC $AC_CFLAGS" in
+*-Wall*|*-pedantic*)    ;;
+*)			AC_DEFINE 'while(x)' 'while( (x) != 0 )'
+			AC_DEFINE 'if(x)' 'if( (x) != 0 )' ;;
+esac
 
 if [ "$ENABLE_UUE" ]; then
     AC_SUB MKUUE ''
