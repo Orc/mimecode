@@ -79,6 +79,7 @@ encode(mimeread read, mimewrite write, void *ctx)
     }
     Write(ctx, ENC('\0'));
     Write(ctx, '\n');
+    return 0;
 }
 
 
