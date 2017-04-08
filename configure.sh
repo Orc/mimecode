@@ -10,11 +10,23 @@ LOCAL_AC_OPTIONS='case "$1" in
 
 AC_INIT mimecode
 
+AC_PROG_CC || exit 1
+
 case "$AC_CC $AC_CFLAGS" in
-*-Wall*|*-pedantic*)    ;;
-*)			AC_DEFINE 'while(x)' 'while( (x) != 0 )'
+*-pedantic*)    ;;
+*)			if [ "$IS_BROKEN_CC" ]; then
+			    # clang or cc; turn off whining about
+			    # 1) "register c"
+			    # 2) &| bitwise expressions
+			    # 3) while (rval = lval)
+			    # 4) if (rval = lval)
+			    AC_CC="$AC_CC -Wno-implicit-int -Wno-bitwise-op-parentheses"
+			fi
+			AC_DEFINE 'while(x)' 'while( (x) != 0 )'
 			AC_DEFINE 'if(x)' 'if( (x) != 0 )' ;;
 esac
+
+unset _MK_LIBRARIAN
 
 if [ "$ENABLE_UUE" ]; then
     AC_SUB MKUUE ''
@@ -22,8 +34,6 @@ else
     AC_SUB MKUUE '#'
 fi
 
-
-AC_PROG_CC || exit 1
 
 TLOGN "Checking for system x_getopt"
 need_local_getopt=T
