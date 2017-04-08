@@ -346,8 +346,7 @@ writechar(context *io, char ch)
 {
     if (ch == '\n')
 	io->linecount++;
-    if (io->output)
-	return io->output ? fputc(ch,io->output) : 1;
+    return io->output ? fputc(ch,io->output) : 1;
 }
 
 
