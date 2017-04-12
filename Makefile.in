@@ -30,7 +30,7 @@ clean:
 	rm -f ravel unravel *.o
 
 distclean spotless: clean
-	@DISTCLEAN@ @GENERATED_FILES@ @CONFIGURE_FILES@ version.c
+	rm -f @CONFIGURE_FILES@ @GENERATED_FILES@ version.c
 
 install: install.bin install.man
 

@@ -238,7 +238,7 @@ main(int argc, char **argv)
 
 	time(&now);
 	uname(&sys);
-	sprintf(template, "%u.%u/%lu/%s.", getuid(), getgid(), (long)now, sys.nodename);
+	sprintf(template, "%u.%u/%u/%s.", getuid(), getgid(), now, sys.nodename);
 #if HAS_DOMAINNAME
 	if (strlen(sys.domainname) > 0 && strcmp(sys.domainname, "(none)") != 0)
 	    strcat(template, sys.domainname);
