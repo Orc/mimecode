@@ -21,8 +21,9 @@
 .Op Fl t Ar recipient
 .Ar file(s)
 .Nm unravel
-.Op Fl 7cfhvaV
+.Op Fl 7cfhvaqV
 .Op Fl p Ar prefix
+.Op Fl t Ar dir
 .Op Ar file
 .Sh DESCRIPTION
 .Nm Ravel
@@ -118,6 +119,8 @@ Replace existing files.
 .It Fl h
 Print a help message describing what command-line options are available,
 then exit.
+.It Fl q
+Run as quietly as possible.
 .It Fl v
 Print debugging and progress messages.
 .It Fl V
@@ -125,6 +128,9 @@ Print what version this is, then exit.
 .It Fl p Ar prefix
 Write unnamed attachments to
 .Ar prefix Ns .seq
+.It Fl t Ar dir
+Write all attachments into
+.Ar dir Ns .
 .El
 .Sh SEE ALSO
 .Xr uudecode 1 ,

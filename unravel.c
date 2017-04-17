@@ -59,8 +59,9 @@ static int sp = 0;
 
 static int verbose = 0;		/* spit out needed debugging */
 static int save_them_all = 0;	/* write all valid fragments */
+static int quiet = 0;		/* work as quietly as possible */
 static int sevenbit = 0;	/* force filenames to usascii */
-static int clip = 0;		/* strip paths off output filenames */
+static char* target = 0;	/* strip paths off output filenames, write them into target */
 
 static char *outputfile = 0;	/* fixed output file for uudecode */
 static char *prefix = "part";	/* name for -a files */
@@ -374,13 +375,15 @@ read_section(FILE* input, Encoder *code, char* filename, int mode)
     context io = { NULL, NULL };
     char *actualname = 0;
 
-    actualname = alloca((filename ? strlen(filename) : strlen(prefix)) + 40);
+    actualname = alloca((filename ? strlen(filename)
+				  : strlen(prefix)) + 40 );
     actualname[0] = 0;
 
     io.input = input;
     io.output = openfile(filename, prefix, actualname);
 
-    namefile(&io,filename,actualname);
+    if ( !quiet )
+	namefile(&io,filename,actualname);
 
     if ( (*code->decode)((mimeread)readline, (mimewrite)writechar, &io) < 0 ) {
 	perror("decode");
@@ -390,7 +393,8 @@ read_section(FILE* input, Encoder *code, char* filename, int mode)
     if (io.output) {
 	if (mode) fchmod(fileno(io.output), mode);
 	fclose(io.output);
-	fprintf(stderr, "[%d line%s]\n", io.linecount, (io.linecount==1)?"":"s");
+	if ( !quiet )
+	    fprintf(stderr, "[%d line%s]\n", io.linecount, (io.linecount==1)?"":"s");
     }
 } /* read_section */
 
@@ -437,18 +441,36 @@ get_translator(char* content_transfer_encoding)
 char *
 fixfilename(char *path)
 {
-    char *from, *to;
+    char *to;
+    int szto;
+    char *p;
 
-    for (to = path, from = clip ? basename(path) : path; *from; ++from) {
-	if (sevenbit)
-	    *from &= 0x7f;
-	if (to != from)
-	    *to = *from;
-	++to;
+    szto = strlen(path);
+
+    if ( target )
+	szto += strlen(target) + 1;
+
+    szto += 2;
+
+    to = malloc(szto);
+
+    *to = 0;
+    if ( target ) {
+	if ( strcmp(target, ".") != 0 ) {
+	    strcat(to,target);
+	    strcat(to, "/");
+	}
+	strcat(to, basename(path));
     }
-    if (to != from)
-	*to = 0;
-    return path;
+    else
+	strcpy(to, path);
+
+
+    if ( sevenbit )
+	for ( p=to; *p; ++p )
+	    *p &= 0x7f;
+
+    return to;
 } /* fixfilename */
 
 
@@ -604,19 +626,23 @@ read_mime(FILE* input)
 struct x_option ropts[] = {
     { '7', '7', "7bit",     0, "Force filenames to 7 bit ascii" },
     { 'a', 'a', "all",      0, "Write all document fragments to files" },
-    { 'c', 'c', "current",  0, "extract attachments to the current directory"},
+    { 'c', 'c', "current",  0, "Extract attachments to the current directory"},
     { 'f', 'f', "overwrite",0, "Overwrite existing files" },
     { 'h', 'h', "help",     0, "Show this message" },
-    { 'p', 'p', "prefix","PFX","set document prefix to PFX" },
+    { 'p', 'p', "prefix","PFX","Set document prefix to PFX" },
+    { 'q', 'q', "quiet",    0, "Run as quietly as possible" },
+    { 't', 't', "target","DIR","Extract attachments to DIR"},
     { 'v', 'v', "verbose",  0, "Display progress messages" },
     { 'V', 'V', "version",  0, "Show the version number, then exit" }
 };
 
 struct x_option uopts[] = {
     { '7', '7', "7bit",     0, "Force filenames to 7 bit ascii" },
-    { 'c', 'c', "current",  0, "write the decoded file to the current directory"},
+    { 'c', 'c', "current",  0, "Write the decoded file to the current directory"},
     { 'f', 'f', "overwrite",0, "Overwrite existing files" },
-    { 'o', 'o', "output","FILE","Write output to FILE" },
+    { 'o', 'o', "output","FILE","Write the decoded file to FILE" },
+    { 'q', 'q', "quiet",    0, "Run as quietly as possible" },
+    { 't', 't', "target","DIR","Write the decoded file into DIR"},
     { 'v', 'v', "verbose",  0, "Display progress messages" },
     { 'V', 'V', "version",  0, "Show the version number, then exit" }
 };
@@ -667,7 +693,10 @@ main(int argc, char **argv)
 		sevenbit++;
 		break;
 	case 'c':
-		clip++;
+		target=".";
+		break;
+	case 't':
+		target = x_optarg;
 		break;
 	case 'f':
 		overwrite++;
@@ -686,6 +715,9 @@ main(int argc, char **argv)
 		break;
 	case 'p':
 		prefix = x_optarg;
+		break;
+	case 'q':
+		quiet = 1;
 		break;
 	case 'V':
 		printf("%s %s\n", pgm, version);
@@ -706,6 +738,18 @@ main(int argc, char **argv)
 	perror(argv[x_optind]);
 	exit(1);
     }
+
+    if ( target && strcmp(target, ".") != 0 ) {
+	/* if a target was given rewrite the default prefix to include that
+	 * target
+	 */
+	char *targetprefix = alloca(strlen(target) + strlen(prefix) + 2);
+
+	sprintf(targetprefix, "%s/%s", target, prefix);
+
+	prefix = targetprefix;
+    }
+    
     if (uudecode)
 	uud(stdin);
     else {

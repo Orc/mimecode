@@ -29,6 +29,9 @@ version.c: config.h
 clean:
 	rm -f ravel unravel *.o
 
+test:
+	cd tests ; make test
+
 distclean spotless: clean
 	rm -f @CONFIGURE_FILES@ @GENERATED_FILES@ version.c
 

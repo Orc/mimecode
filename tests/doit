@@ -1,0 +1,70 @@
+#! /bin/sh
+
+
+trap "rm -rf tc$$" 1 2 3 9 15
+
+
+checkchecksums () {
+    (   cd $1
+	while read chksum attachment;do
+	    newsum=`$CHK < "$attachment" 2>/dev/null | awk '{print $1}'`
+
+	    if [ "$newsum" != "$chksum" ]; then
+	        echo 1>&2 "$file: $attachment: incorrect checksum ($chksum/$newsum)"
+		return 1
+	    fi
+	done
+	return 0 )
+    return $?
+}
+
+#
+# test files are
+#  line 1: test type (mime|uu)
+#  line 2: test file
+#  line 3-$:   file checksum
+#
+runtest() {
+    (
+	trap "rm -rf test$$" 1 2 3 9 15
+	
+	local uuencoded
+	
+	read file
+
+	case X"$file" in
+	X-*)options=$file
+	    read file ;;
+	esac
+
+
+	rm -rf test$$
+	mkdir test$$
+
+	../unravel $options -qt test$$ < $file
+	checkchecksums test$$
+	res=$?
+	rm -rf test$$
+	
+	if [ "$res" -eq 0 ]; then
+	    echo "${file}: ok"
+	fi
+	return $res
+    ) < $x
+    return $?
+}
+
+
+if md5 </dev/null >/dev/null 2>/dev/null ; then
+    CHK=md5
+elif md5sum </dev/null >/dev/null 2>/dev/null ; then
+    CHK=md5sum
+else
+    echo 1>&2 "no md5/md5sum program on this machine?"
+    exit 1
+fi
+
+for x in *.t; do
+    test -r $x && runtest $x || exit 1
+done
+exit 0

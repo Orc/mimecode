@@ -39,8 +39,9 @@
 .Nd decode a uuencoded file
 .Sh SYNOPSIS
 .Nm
-.Op Fl 7cfV
+.Op Fl 7cfqV
 .Op Fl o Ar file
+.Op Fl t Ar dir
 .Op Ar file
 .Sh DESCRIPTION
 .Nm
@@ -69,6 +70,12 @@ Replace existing files.
 Write the decoded file to
 .Ar file ,
 instead of to the filename specified on the
+.Ar begin
+line.
+.It Fl t Ar dir
+Write the decoded file to
+.Ar dir
+instead of to the directory specified on the
 .Ar begin
 line.
 .It Fl V
