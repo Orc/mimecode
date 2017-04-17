@@ -85,6 +85,12 @@ decode( mimeread read, mimewrite write, void *context)
 	code = line;
 
 	while ( (size >= 4) && (code[0] != '=') ) {
+	    if ( X64dec[code[0]] == -1 ) {
+		/* skip over non-x64 characters between code blocks */
+		++code;
+		--size;
+		continue;
+	    }
 	    c[0] = X64dec[code[0]];
 	    c[1] = X64dec[code[1]];
 	    c[2] = X64dec[code[2]];
