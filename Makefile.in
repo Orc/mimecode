@@ -26,14 +26,15 @@ unravel: unravel.o $(OBJS) @OPTIONS@
 
 version.c: config.h
 	echo 'char version[] = "@VERSION@";' > version.c
+
 clean:
-	rm -f ravel unravel *.o
+	rm -f ravel unravel *.o version.c
 
 test:
 	@cd tests ; make test
 
 distclean spotless: clean
-	rm -f @CONFIGURE_FILES@ @GENERATED_FILES@ version.c
+	@DISTCLEAN@ @CONFIGURE_FILES@ @GENERATED_FILES@
 
 install: install.bin install.man
 
