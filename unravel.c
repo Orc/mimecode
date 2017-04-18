@@ -62,6 +62,7 @@ static int save_them_all = 0;	/* write all valid fragments */
 static int quiet = 0;		/* work as quietly as possible */
 static int sevenbit = 0;	/* force filenames to usascii */
 static char* target = 0;	/* strip paths off output filenames, write them into target */
+static int dryrun = 0;		/* don't actually write the files */
 
 static char *outputfile = 0;	/* fixed output file for uudecode */
 static char *prefix = "part";	/* name for -a files */
@@ -380,9 +381,9 @@ read_section(FILE* input, Encoder *code, char* filename, int mode)
     actualname[0] = 0;
 
     io.input = input;
-    io.output = openfile(filename, prefix, actualname);
+    io.output = dryrun ? 0 : openfile(filename, prefix, actualname);
 
-    if ( !quiet )
+    if ( !(quiet||dryrun) )
 	namefile(&io,filename,actualname);
 
     if ( (*code->decode)((mimeread)readline, (mimewrite)writechar, &io) < 0 ) {
@@ -396,6 +397,9 @@ read_section(FILE* input, Encoder *code, char* filename, int mode)
 	if ( !quiet )
 	    fprintf(stderr, "[%d line%s]\n", io.linecount, (io.linecount==1)?"":"s");
     }
+    else if ( !quiet )
+	printf("; %d line%s\n",
+		io.linecount, (io.linecount==1)?"":"s");
 } /* read_section */
 
 
@@ -501,6 +505,12 @@ uud(FILE *input)
 
 	    if (p == fi) error("badly formed uuencode ``begin'' line");
 
+	    if ( dryrun ) {
+		printf("%*suuencoded", sp, "");
+		if ( outputfile )
+		    printf("; \"%s\"", outputfile);
+	    }
+
 	    mode &= 0777;	/* mask off unwanted mode bits */
 
 	    while (isspace(*p)) ++p;
@@ -589,6 +599,8 @@ read_mime(FILE* input)
 	     */
 
 
+	    if ( dryrun )
+		printf("%*s%s\n", sp, "", headers.content_type);
 	    if (boundary) {
 		int level;
 
@@ -618,6 +630,12 @@ read_mime(FILE* input)
 	return;
     }
 
+    if ( dryrun ) {
+	printf("%*s%s", sp, "", headers.content_type);
+	if ( filename )
+	    printf("; \"%s\"", filename);
+    }
+
     return (filename||save_them_all) ? read_section(input, ofn, filename, 0)
 				     : eat_section(input);
 } /* read_mime */
@@ -627,6 +645,7 @@ struct x_option ropts[] = {
     { '7', '7', "7bit",     0, "Force filenames to 7 bit ascii" },
     { 'a', 'a', "all",      0, "Write all document fragments to files" },
     { 'c', 'c', "current",  0, "Extract attachments to the current directory"},
+    { 'd', 'd', "dryrun",   0, "dryrun: show what would be extracted, but don't do it" },
     { 'f', 'f', "overwrite",0, "Overwrite existing files" },
     { 'h', 'h', "help",     0, "Show this message" },
     { 'p', 'p', "prefix","PFX","Set document prefix to PFX" },
@@ -697,6 +716,9 @@ main(int argc, char **argv)
 		break;
 	case 't':
 		target = x_optarg;
+		break;
+	case 'd':
+		dryrun++;
 		break;
 	case 'f':
 		overwrite++;
