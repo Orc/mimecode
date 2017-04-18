@@ -31,7 +31,7 @@ clean:
 	rm -f ravel unravel *.o version.c
 
 test: unravel
-	@cd tests ; make test
+	@cd tests ; MAKELEVEL= make test
 
 distclean spotless: clean
 	@DISTCLEAN@ @CONFIGURE_FILES@ @GENERATED_FILES@
