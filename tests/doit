@@ -13,7 +13,13 @@ checkchecksums () {
 	        echo 1>&2 "$file: $attachment: incorrect checksum ($chksum/$newsum)"
 		return 1
 	    fi
+	    rm "$attachment"
 	done
+	leftover=`ls`
+	if [ -n "$leftover" ] ;then
+	    echo 1>&2 "$file: contains additional elements $leftover"
+	    return 1
+	fi
 	return 0 )
     return $?
 }
