@@ -505,12 +505,6 @@ uud(FILE *input)
 
 	    if (p == fi) error("badly formed uuencode ``begin'' line");
 
-	    if ( dryrun ) {
-		printf("%*suuencoded", sp, "");
-		if ( outputfile )
-		    printf("; \"%s\"", outputfile);
-	    }
-
 	    mode &= 0777;	/* mask off unwanted mode bits */
 
 	    while (isspace(*p)) ++p;
@@ -523,9 +517,16 @@ uud(FILE *input)
 	    else filename = p;
 
 	    if (*filename == 0) error("badly formed uuencode ``begin'' line");
+	    
+	    filename = outputfile ? outputfile : fixfilename(filename);
+	    
+	    if ( dryrun ) {
+		printf("%*suuencoded", sp, "");
+		printf("; \"%s\"", filename);
+		printf("; mode %03o", mode);
+	    }
 
-	    read_section(input, code, outputfile ? outputfile
-						 : fixfilename(filename), mode);
+	    read_section(input, code, filename, mode);
 	}
 } /* uud */
 
