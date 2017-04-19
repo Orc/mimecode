@@ -128,8 +128,8 @@ static void
 pushboundary(char* boundary)
 {
     sp++;
-    if (sp == nrbound) {
-	nrbound = (nrbound+1) * 2;
+    if (sp >= nrbound) {
+	nrbound = (sp+1) * 2;
 	stack = realloc(stack, nrbound * sizeof stack[0]);
     }
     stack[sp].mark = strdup(boundary);
@@ -775,7 +775,7 @@ main(int argc, char **argv)
     if (uudecode)
 	uud(stdin);
     else {
-	stack = malloc(1);
+	stack = malloc(sizeof stack[0]);
 	read_mime(stdin);
     }
     exit(0);
